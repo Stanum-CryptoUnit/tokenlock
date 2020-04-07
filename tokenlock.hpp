@@ -1,7 +1,7 @@
 #include <eosiolib/multi_index.hpp>
 #include <eosiolib/contract.hpp>
 
-#define isDebug = TRUE
+define isDebug = TRUE
 
 class [[eosio::contract]] tokenlock : public eosio::contract {
 
