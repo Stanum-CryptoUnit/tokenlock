@@ -1,7 +1,7 @@
 #include <eosiolib/multi_index.hpp>
 #include <eosiolib/contract.hpp>
 
-#define isDebug 1 //commit for production
+#define IS_DEBUG //commit for production
 #define PERCENT_PRECISION 10000
 class [[eosio::contract]] tokenlock : public eosio::contract {
 
@@ -18,7 +18,9 @@ public:
 
     static constexpr uint64_t _seconds_in_one_day = 86400;
     
-    #ifdef isDebug
+
+    #ifdef IS_DEBUG
+        static constexpr bool _is_debug = true;
         static constexpr eosio::name _self = "tokenlock"_n;
         static constexpr eosio::name _genesis = "genesis"_n;
         static constexpr eosio::name _token_contract = "eosio.token"_n;
@@ -28,16 +30,16 @@ public:
         static constexpr uint64_t _cycle_length = 10;
 
     #else 
+        static constexpr bool _is_debug = false;
         static constexpr eosio::name _self = "tokenlock"_n;   
         static constexpr eosio::name _genesis = "genesis"_n;
         static constexpr eosio::name _token_contract = "eosio.token"_n;
         static constexpr eosio::symbol _op_symbol     = eosio::symbol(eosio::symbol_code("CRU"), 0);
-        static constexpr uint64_t _alg1_freeze_seconds = 25920000;
-        static constexpr uint64_t _alg2_freeze_seconds = 47090000;
-        static constexpr uint64_t _cycle_length = 86400 * 30;
+        static constexpr uint64_t _alg1_freeze_seconds = 15552000;
+        static constexpr uint64_t _alg2_freeze_seconds = 47088000;
+        static constexpr uint64_t _cycle_length = 2592000;
 
     #endif
-
 
     struct [[eosio::table]] users {
         eosio::name username;
