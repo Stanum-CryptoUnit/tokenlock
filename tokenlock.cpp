@@ -3,39 +3,120 @@
 #include <eosiolib/time.hpp>
 #include <eosiolib/print.hpp>
 #include <eosiolib/system.hpp>
+
 #include "tokenlock.hpp"
 
 using namespace eosio;
+
 
   [[eosio::action]] void tokenlock::refresh(eosio::name username, uint64_t id){
     require_auth(username);
     
     users_index users(_self, _self.value);
-    auto exist = users.fidd(username);
-    eosio::check(exist == users.end(), "User is already migrated");
+    auto user = users.find(username.value);
+    eosio::check(user != users.end(), "User is not migrated");
+
+    locks_index locks(_self, username.value);
+    auto lock = locks.find(id);
+    eosio::check(lock != locks.end(), "Lock object is not found");
+
+    auto migrated_at = user -> migrated_at;
+    auto created_at = lock-> created;
+
+    if (lock->algorithm == 1){
+    
+      eosio::time_point_sec distribution_start_at = eosio::time_point_sec(created_at.sec_since_epoch() + _alg1_freeze_seconds);
+      bool distribution_is_started = distribution_start_at <= eosio::time_point_sec(now());
+      
+      print("distribution_is_started:", distribution_is_started);
+
+
+      uint64_t last_distributed_cycle;
+
+      if (distribution_is_started) {
+  
+        if (lock -> last_distribution_at == eosio::time_point_sec(0)){ //Распределяем по контракту впервые
+
+          last_distributed_cycle = (migrated_at.sec_since_epoch() - created_at.sec_since_epoch()) / _cycle_length;
+          print("last_distributed_cycle1: ", last_distributed_cycle);
+        } else { //Если распределение уже производилось
+
+          last_distributed_cycle = ((lock -> last_distribution_at).sec_since_epoch() - created_at.sec_since_epoch()) / _cycle_length;
+          print("last_distributed_cycle2: ", last_distributed_cycle);
+        }
+
+        
+        uint64_t between_in_seconds = now() - created_at.sec_since_epoch();
+        uint64_t current_cycle = between_in_seconds / _cycle_length;
+        double percent = 0;
+        
+        print("current_cycle: ", current_cycle);
+
+        while(last_distributed_cycle + 1 <= current_cycle){
+          last_distributed_cycle++;
+
+          if (last_distributed_cycle >= 11 && last_distributed_cycle < 17 ) //6m
+            percent = 1;
+          if (last_distributed_cycle >= 17 && last_distributed_cycle < 23 ) //6m
+            percent = 1.5;
+          if (last_distributed_cycle >= 23 && last_distributed_cycle < 29 ) //6m
+            percent = 2;
+          if (last_distributed_cycle >= 29 && last_distributed_cycle < 35 ) //6m
+            percent = 3;
+          if (last_distributed_cycle >= 35 && last_distributed_cycle < 46 ) //11m
+            percent = 5;
+
+
+          double amount_to_unfreeze = percent * (lock -> amount).amount / 100;
+          print("amount_to_unfreeze: ", amount_to_unfreeze);
+          eosio::asset asset_amount_to_unfreeze = asset(amount_to_unfreeze, _op_symbol);
+          print("to_unfreeze: ", asset_amount_to_unfreeze);
+          eosio::time_point_sec last_distribution_at = eosio::time_point_sec((lock->created).sec_since_epoch() + last_distributed_cycle * _cycle_length);
+      
+      
+          locks.modify(lock, _self, [&](auto &l){
+            l.available += asset_amount_to_unfreeze;
+            l.last_distribution_at = last_distribution_at;
+          });
+
+          
+
+        }
+
+
+
+
+
+      }
+    } else if (lock->algorithm == 2) {
+
+    };
+
 
 
   };
+
 
   [[eosio::action]] void tokenlock::withdraw(eosio::name username, uint64_t id){
     require_auth(username);
 
     users_index users(_self, _self.value);
-    auto exist = users.fidd(username);
-    eosio::check(exist == users.end(), "User is already migrated");
-   
+    auto exist = users.find(username.value);
+    eosio::check(exist != users.end(), "User is not migrated");
+    
+
 
   };
 
 
   [[eosio::action]] void tokenlock::migrate(eosio::name username){
     require_auth(_self);
-
+    
     users_index users(_self, _self.value);
-    auto exist = users.fidd(username);
+    auto exist = users.find(username.value);
     eosio::check(exist == users.end(), "User is already migrated");
 
-    users.emplace(_self, [&](auto u){
+    users.emplace(_self, [&](auto &u){
       u.username = username;
       u.migrated_at = eosio::time_point_sec(now());
     });
@@ -71,9 +152,12 @@ using namespace eosio;
         
         locks.emplace(_self, [&](auto &l){
           l.id = id;
-          l.datetime = datetime;
+          l.created = datetime;
+          l.last_distribution_at = eosio::time_point_sec(0);
           l.algorithm = algorithm;
           l.amount = amount_in_asset;
+          l.available = asset(0, _op_symbol);
+          l.withdrawed = asset(0, _op_symbol);
         });  
     
         action( //issue to genesis account
@@ -125,7 +209,7 @@ using namespace eosio;
       l.lock_id = id;
       l.lock_parent_id = parent_id;
       l.username = username;
-      l.datetime = datetime;
+      l.created = datetime;
       l.algorithm = algorithm;
       l.amount = amount_in_asset;
     });
@@ -141,7 +225,13 @@ extern "C" {
         if (code == tokenlock::_self.value) {
           if (action == "add"_n.value){
             execute_action(name(receiver), name(code), &tokenlock::add);
-          }        
+          } else if (action == "migrate"_n.value){
+            execute_action(name(receiver), name(code), &tokenlock::migrate);
+          } else if (action == "refresh"_n.value){
+            execute_action(name(receiver), name(code), &tokenlock::refresh);
+          } else if (action == "withdraw"_n.value){
+            execute_action(name(receiver), name(code), &tokenlock::withdraw);
+          }          
         } else {
           if (action == "transfer"_n.value){
             

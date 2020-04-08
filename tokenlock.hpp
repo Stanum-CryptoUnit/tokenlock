@@ -1,8 +1,8 @@
 #include <eosiolib/multi_index.hpp>
 #include <eosiolib/contract.hpp>
 
-define isDebug = TRUE
-
+#define isDebug 1 //commit for production
+#define PERCENT_PRECISION 10000
 class [[eosio::contract]] tokenlock : public eosio::contract {
 
 public:
@@ -15,20 +15,27 @@ public:
     
 
     void apply(uint64_t receiver, uint64_t code, uint64_t action);
-    
-    static constexpr uint64_t _alg1_freeze_seconds = 25920000
-    static constexpr uint64_t _alg2_freeze_seconds = 47090000
 
+    static constexpr uint64_t _seconds_in_one_day = 86400;
+    
     #ifdef isDebug
         static constexpr eosio::name _self = "tokenlock"_n;
         static constexpr eosio::name _genesis = "genesis"_n;
         static constexpr eosio::name _token_contract = "eosio.token"_n;
         static constexpr eosio::symbol _op_symbol     = eosio::symbol(eosio::symbol_code("CRU"), 0);
+        static constexpr uint64_t _alg1_freeze_seconds = 20;
+        static constexpr uint64_t _alg2_freeze_seconds = 40;
+        static constexpr uint64_t _cycle_length = 10;
+
     #else 
         static constexpr eosio::name _self = "tokenlock"_n;   
         static constexpr eosio::name _genesis = "genesis"_n;
         static constexpr eosio::name _token_contract = "eosio.token"_n;
         static constexpr eosio::symbol _op_symbol     = eosio::symbol(eosio::symbol_code("CRU"), 0);
+        static constexpr uint64_t _alg1_freeze_seconds = 25920000;
+        static constexpr uint64_t _alg2_freeze_seconds = 47090000;
+        static constexpr uint64_t _cycle_length = 86400 * 30;
+
     #endif
 
 
@@ -36,7 +43,7 @@ public:
         eosio::name username;
         eosio::time_point_sec migrated_at;
 
-        uint64_t primary_key() const {return username;}
+        uint64_t primary_key() const {return username.value;}
         
         EOSLIB_SERIALIZE(users, (username)(migrated_at))
     };
@@ -46,8 +53,8 @@ public:
 
     struct [[eosio::table]] locks {
         uint64_t id;
-        eosio::time_point_sec created_at;
-        eosio::time_point_sec unlocked_at;
+        eosio::time_point_sec created;
+        eosio::time_point_sec last_distribution_at;
         
         uint64_t algorithm;
         eosio::asset amount;
@@ -55,7 +62,7 @@ public:
         eosio::asset withdrawed;
         uint64_t primary_key() const {return id;}
         
-        EOSLIB_SERIALIZE(locks, (id)(datetime)(algorithm)(amount)(available)(withdrawed))
+        EOSLIB_SERIALIZE(locks, (id)(created)(last_distribution_at)(algorithm)(amount)(available)(withdrawed))
     };
 
     typedef eosio::multi_index<"locks"_n, locks> locks_index;
@@ -67,7 +74,7 @@ public:
         uint64_t lock_parent_id;
         eosio::name username;
 
-        eosio::time_point_sec datetime;
+        eosio::time_point_sec created;
         uint64_t algorithm;
         eosio::asset amount;
 
@@ -78,7 +85,7 @@ public:
         uint64_t byparentid() const {return lock_parent_id;}
         uint64_t byalgo() const {return algorithm;}
 
-        EOSLIB_SERIALIZE(history, (id)(lock_id)(lock_parent_id)(username)(datetime)(algorithm)(amount))
+        EOSLIB_SERIALIZE(history, (id)(lock_id)(lock_parent_id)(username)(created)(algorithm)(amount))
     };
 
     typedef eosio::multi_index<"history"_n, history,
