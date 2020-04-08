@@ -14,10 +14,7 @@ public:
     [[eosio::action]] void withdraw(eosio::name username, uint64_t id);
     
 
-    void apply(uint64_t receiver, uint64_t code, uint64_t action);
-
-    static constexpr uint64_t _seconds_in_one_day = 86400;
-    
+    void apply(uint64_t receiver, uint64_t code, uint64_t action);   
 
     #ifdef IS_DEBUG
         static constexpr bool _is_debug = true;
@@ -25,9 +22,9 @@ public:
         static constexpr eosio::name _genesis = "genesis"_n;
         static constexpr eosio::name _token_contract = "eosio.token"_n;
         static constexpr eosio::symbol _op_symbol     = eosio::symbol(eosio::symbol_code("CRU"), 0);
-        static constexpr uint64_t _alg1_freeze_seconds = 20;
-        static constexpr uint64_t _alg2_freeze_seconds = 40;
-        static constexpr uint64_t _cycle_length = 10;
+        static constexpr uint64_t _alg1_freeze_seconds = 10;
+        static constexpr uint64_t _alg2_freeze_seconds = 15;
+        static constexpr uint64_t _cycle_length = 5;
 
     #else 
         static constexpr bool _is_debug = false;

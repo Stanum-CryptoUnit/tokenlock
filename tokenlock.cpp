@@ -43,9 +43,10 @@ using namespace eosio;
     if (distribution_is_started) {
 
       if (lock -> last_distribution_at == eosio::time_point_sec(0)){ //Распределяем по контракту впервые
+        uint64_t cycle_distance = (migrated_at.sec_since_epoch() - created_at.sec_since_epoch()) /  _cycle_length;
+        uint64_t freeze_cycles = freeze_seconds / _cycle_length;
 
-        last_distributed_cycle = (migrated_at.sec_since_epoch() - created_at.sec_since_epoch()) \
-             /  _cycle_length - freeze_seconds / _cycle_length;
+        last_distributed_cycle = cycle_distance >= freeze_cycles ? cycle_distance - freeze_cycles : 0;
 
         print("last_distributed_cycle1: ", last_distributed_cycle);
       } else { //Если распределение уже производилось
@@ -82,6 +83,7 @@ using namespace eosio;
           print("to_unfreeze: ", asset_amount_to_unfreeze);
           eosio::time_point_sec last_distribution_at = eosio::time_point_sec((lock->created).sec_since_epoch() + last_distributed_cycle * _cycle_length + freeze_seconds);
 
+          //TODO calculate already withdrawed amount from database and keep it
           locks.modify(lock, _self, [&](auto &l){
             l.available += asset_amount_to_unfreeze;
             l.last_distribution_at = last_distribution_at;
@@ -102,7 +104,34 @@ using namespace eosio;
     auto exist = users.find(username.value);
     eosio::check(exist != users.end(), "User is not migrated");
     
-    
+    locks_index locks(_self, username.value);
+    auto lock = locks.find(id);
+    if ((lock -> available).amount > 0){
+      
+      eosio::asset to_withdraw = lock -> available;
+
+      action(
+        permission_level{ _genesis, "active"_n },
+        _token_contract, "transfer"_n,
+        std::make_tuple( _genesis, username, to_withdraw, std::string("")) 
+      ).send();
+        
+
+      if (lock -> withdrawed + lock -> available == lock -> amount){
+
+        locks.erase(lock);
+      
+      } else {
+      
+        locks.modify(lock, _self, [&](auto &l){
+          l.available = asset(0, _op_symbol);
+          l.withdrawed += to_withdraw; 
+        });
+      
+      }
+
+    }
+
 
   };
 
@@ -134,10 +163,10 @@ using namespace eosio;
     auto exist = locks.find(id);
     eosio::check(exist == locks.end(), "Lock object with current ID is already exist");
 
-    if (parent_id == 0){ //without parent_id
+    if (parent_id == 0){ //без parent_id
       eosio::check(amount > 0, "Amount for issue to lock-object should be more then zero");
 
-      if ( algorithm == 0 ){ //transfer unlocked
+      if ( algorithm == 0 ){ //перевод для unlocked CRU
            
         action(
           permission_level{ _genesis, "active"_n },
@@ -146,7 +175,7 @@ using namespace eosio;
         ).send();
           
 
-      } else { //create lock object
+      } else { //создаем объект заморозки
         
         locks.emplace(_self, [&](auto &l){
           l.id = id;
@@ -158,7 +187,7 @@ using namespace eosio;
           l.withdrawed = asset(0, _op_symbol);
         });  
     
-        action( //issue to genesis account
+        action( //выпускаем токены на аккаунт genesis
           permission_level{ _genesis, "active"_n },
           _token_contract, "issue"_n,
           std::make_tuple( _genesis, amount_in_asset, std::string("")) 
@@ -167,9 +196,8 @@ using namespace eosio;
       }      
 
 
-    } else { //with parent_id
-      //TODO get algorithm for history from parent_id!
-
+    } else { //с parent_id
+      
       auto parent_lock_object = locks.find(parent_id);
       
       algorithm = parent_lock_object->algorithm;
