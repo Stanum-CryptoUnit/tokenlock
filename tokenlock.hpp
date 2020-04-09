@@ -1,7 +1,12 @@
 #include <eosiolib/multi_index.hpp>
 #include <eosiolib/contract.hpp>
+#include <eosiolib/eosio.hpp>
+#include <eosiolib/asset.hpp>
+#include <eosiolib/time.hpp>
+#include <eosiolib/print.hpp>
+#include <eosiolib/system.hpp>
 
-#define IS_DEBUG //commit for production
+// #define IS_DEBUG //commit for production
 #define PERCENT_PRECISION 10000
 class [[eosio::contract]] tokenlock : public eosio::contract {
 

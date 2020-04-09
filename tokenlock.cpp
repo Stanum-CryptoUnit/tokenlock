@@ -6,9 +6,19 @@
 
 #include "tokenlock.hpp"
 
+
 using namespace eosio;
 
-
+  /*  
+   *  refresh(eosio::name username, uint64_t id)
+   *    - username - пользователь, которому принадлежит обновляемый объект начисления
+   *    - id - идентификатор объекта начисления
+   *    
+   *    Требует авторизации ключом username уровня active.
+   *    Обновляет состояние объекта начисления пользователя. 
+   *    Производит расчет доступных к выводу токенов и записывает их в поле available таблицы locks. 
+   *
+   */
   [[eosio::action]] void tokenlock::refresh(eosio::name username, uint64_t id){
     require_auth(username);
     
@@ -33,31 +43,35 @@ using namespace eosio;
     
     distribution_start_at = eosio::time_point_sec(created_at.sec_since_epoch() + freeze_seconds);
     
-    bool distribution_is_started = distribution_start_at <= eosio::time_point_sec(now());
+    bool distribution_is_start = distribution_start_at <= eosio::time_point_sec(now());
     
-    print("distribution_is_started:", distribution_is_started);
+    print("distribution_is_start:", distribution_is_start);
 
 
     uint64_t last_distributed_cycle;
+    uint64_t compressed_cycles;
 
-    if (distribution_is_started) {
+    if (distribution_is_start) {
 
       if (lock -> last_distribution_at == eosio::time_point_sec(0)){ //Распределяем по контракту впервые
-        uint64_t cycle_distance = (migrated_at.sec_since_epoch() - created_at.sec_since_epoch()) /  _cycle_length;
+        
+        uint64_t cycle_distance = migrated_at.sec_since_epoch() >= created_at.sec_since_epoch() ? (migrated_at.sec_since_epoch() - created_at.sec_since_epoch()) /  _cycle_length : 0;
         uint64_t freeze_cycles = freeze_seconds / _cycle_length;
 
-        last_distributed_cycle = cycle_distance >= freeze_cycles ? cycle_distance - freeze_cycles : 0;
-
-        print("last_distributed_cycle1: ", last_distributed_cycle);
+        last_distributed_cycle = 0;
+        compressed_cycles = cycle_distance >= freeze_cycles ? cycle_distance - freeze_cycles : 0;
+      
       } else { //Если распределение уже производилось
 
         last_distributed_cycle = ((lock -> last_distribution_at).sec_since_epoch() - created_at.sec_since_epoch()) / _cycle_length - freeze_seconds / _cycle_length;
-        print("last_distributed_cycle2: ", last_distributed_cycle);
+
       }
 
+      print("last_distributed_cycle1: ", last_distributed_cycle);
       
-      uint64_t between_in_seconds = now() - created_at.sec_since_epoch() - freeze_seconds;
-      uint64_t current_cycle = between_in_seconds / _cycle_length;
+      uint64_t between_now_and_created_in_seconds = now() - created_at.sec_since_epoch() - freeze_seconds;
+      uint64_t current_cycle = between_now_and_created_in_seconds / _cycle_length;
+      
       double percent = 0;
       
       print("current_cycle: ", current_cycle);
@@ -77,25 +91,53 @@ using namespace eosio;
           percent = 5;
 
         if (last_distributed_cycle < 36){
-          double amount_to_unfreeze = percent * (lock -> amount).amount / 100;
+          double amount_to_unfreeze = 0;
+          double amount_already_unfreezed = 0;
+
+          if (last_distributed_cycle <= compressed_cycles ){
           
-          eosio::asset asset_amount_to_unfreeze = asset(amount_to_unfreeze, _op_symbol);
+            amount_already_unfreezed = percent * (lock -> amount).amount / 100;
+            
+          } else {
+          
+            amount_to_unfreeze = percent * (lock -> amount).amount / 100;
+          
+          }
+  
+
+          eosio::asset asset_amount_to_unfreeze = asset((uint64_t)amount_to_unfreeze, _op_symbol);
+          eosio::asset asset_amount_already_unfreezed = asset((uint64_t)amount_already_unfreezed, _op_symbol);
+
+
           print("to_unfreeze: ", asset_amount_to_unfreeze);
+          print("already_unfreezed: ", asset_amount_already_unfreezed);    
+                
           eosio::time_point_sec last_distribution_at = eosio::time_point_sec((lock->created).sec_since_epoch() + last_distributed_cycle * _cycle_length + freeze_seconds);
 
           //TODO calculate already withdrawed amount from database and keep it
           locks.modify(lock, _self, [&](auto &l){
             l.available += asset_amount_to_unfreeze;
             l.last_distribution_at = last_distribution_at;
+            l.withdrawed += asset_amount_already_unfreezed;
           });
         }
       }
     }
-  
-
-
   };
 
+
+  /*  
+   *  withdraw(eosio::name username, uint64_t id)
+   *    - username - пользователь, которому принадлежит выводимый объект начисления
+   *    - id - идентификатор объекта начисления
+   *    
+   *    Требует авторизации ключом username уровня active.
+   *    Метод вывода баланса объекта начисления
+   *    Передает размороженные токены объекта начисления на аккаунт пользователя. 
+   *    Уменьшает количество доступных токенов в поле available таблицы locks до нуля. 
+   *    Увеличивает количество выведенных токенов в поле withdrawed на сумму вывода. 
+   *    При полном выводе всех токенов - удаляет объект начисления.
+   */
 
   [[eosio::action]] void tokenlock::withdraw(eosio::name username, uint64_t id){
     require_auth(username);
@@ -136,6 +178,21 @@ using namespace eosio;
   };
 
 
+  /*
+   *  migrate(eosio::name username)
+   *    - username - имя аккаунта пользователя
+   *    
+   *    Требует авторизации ключом аккаунта tokenlock уровня active.
+   *    Событие миграции активирует разморозку по контракту tokenlock. 
+   *    До события миграции пользователь не может совершать действия со своими объектами начисления. 
+   *    Разморозка токенов по контракту начинается в следующем цикле распределения после события миграции.
+   *    
+   *    Пример:
+   *      bob получил первый объект начисления по базе данных 240 дней назад. 
+   *      Он уже получил две выплаты согласно алгоритму 1 по базе данных. 
+   *      После вызова события миграции для аккаунта bob, ему будет доступно только 34 цикла распределения в контракте.
+   *      Сумма, которая уже была получена пользователем по базе данных до события миграции рассчитывается и устанавливается в поле withdrawed при первом обновлении объекта начисления. 
+   */
   [[eosio::action]] void tokenlock::migrate(eosio::name username){
     require_auth(_self);
     
@@ -150,6 +207,22 @@ using namespace eosio;
 
   };
 
+
+  /*
+   *  add (eosio::name username, uint64_t id, uint64_t parent_id, eosio::time_point_sec datetime, uint64_t algorithm, int64_t amount)
+   *    - username - имя пользователя
+   *    - id - идентификатор начисления во внешней базе данных
+   *    - parent_id - идентификатор баланса списания во внешней базе данных. Указывается с отрицательной суммой amount для списания из объекта начисления
+   *    - datetime - дата создания объекта во внешней базе данных в формате "2020-04-08T16:11:22"
+   *    - algorithm - используемый алгоритм разморозки. Принимает значения 0 - размороженные токены, необходимо сразу перечислить; 1 - алгоритм разморозки 1, 2 - алгоритм разморозки 2.
+   *    - amount - целочисленная величина начисления или списания CRU. Может принимать отрицательные знания при списании. 
+   *    
+   *    Требует авторизации ключом аккаунта tokenlock уровня active.
+   *    Добавляет объект начисления в таблицу locks. 
+   *    Списывает токены из объекта начисления parent_id, если parent_id != 0 и amount < 0
+   *    Инициирует эмиссию токена в контракте eosio.token на аккаунт genesis с целью дальнейшей передачи на аккаунт пользователя username по событию withdraw или немедленно. 
+   *    Размороженные объекты немедленно передаются пользователю без записи в таблицу locks. Замороженные объекты требуют совершения действия пользователя для получения размороженных токенов.
+   */
 
   [[eosio::action]] void tokenlock::add(eosio::name username, uint64_t id, uint64_t parent_id, eosio::time_point_sec datetime, uint64_t algorithm, int64_t amount){
     require_auth(_self);
@@ -166,7 +239,7 @@ using namespace eosio;
     if (parent_id == 0){ //без parent_id
       eosio::check(amount > 0, "Amount for issue to lock-object should be more then zero");
 
-      if ( algorithm == 0 ){ //перевод для unlocked CRU
+      if ( algorithm == 0 ){ //выпуск токенов на пользователя для unlocked CRU
            
         action(
           permission_level{ _genesis, "active"_n },
@@ -221,7 +294,7 @@ using namespace eosio;
       });    
 
       
-      action( //burn from genesis account in reduce case
+      action( //сжигаем токены на аккаунте genesis если производится списание
         permission_level{ _genesis, "active"_n },
         _token_contract, "retire"_n,
         std::make_tuple( to_retire, std::string("")) 
