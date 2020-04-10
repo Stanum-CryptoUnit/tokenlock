@@ -155,9 +155,9 @@ using namespace eosio;
       eosio::asset to_withdraw = lock -> available;
 
       action(
-        permission_level{ _genesis, "active"_n },
+        permission_level{ _reserve, "active"_n },
         _token_contract, "transfer"_n,
-        std::make_tuple( _genesis, username, to_withdraw, std::string("")) 
+        std::make_tuple( _reserve, username, to_withdraw, std::string("")) 
       ).send();
         
 
@@ -222,7 +222,7 @@ using namespace eosio;
    *    Требует авторизации ключом аккаунта tokenlock уровня active.
    *    Добавляет объект начисления в таблицу locks. 
    *    Списывает токены из объекта начисления parent_id, если parent_id != 0 и amount < 0
-   *    Инициирует эмиссию токена в контракте eosio.token на аккаунт genesis с целью дальнейшей передачи на аккаунт пользователя username по событию withdraw или немедленно. 
+   *    Инициирует эмиссию токена в контракте eosio.token на аккаунт reserve с целью дальнейшей передачи на аккаунт пользователя username по событию withdraw или немедленно. 
    *    Размороженные объекты немедленно передаются пользователю без записи в таблицу locks. Замороженные объекты требуют совершения действия пользователя для получения размороженных токенов.
    */
 
@@ -244,9 +244,9 @@ using namespace eosio;
       if ( algorithm == 0 ){ //выпуск токенов на пользователя для unlocked CRU
            
         action(
-          permission_level{ _genesis, "active"_n },
-          _token_contract, "issue"_n,
-          std::make_tuple( username, amount_in_asset, std::string("")) 
+          permission_level{ _reserve, "active"_n },
+          _token_contract, "transfer"_n,
+          std::make_tuple( _reserve, username, amount_in_asset, std::string("")) 
         ).send();
           
 
@@ -261,13 +261,7 @@ using namespace eosio;
           l.available = asset(0, _op_symbol);
           l.withdrawed = asset(0, _op_symbol);
         });  
-    
-        action( //выпускаем токены на аккаунт genesis
-          permission_level{ _genesis, "active"_n },
-          _token_contract, "issue"_n,
-          std::make_tuple( _genesis, amount_in_asset, std::string("")) 
-        ).send();
-          
+              
       }      
 
 
@@ -294,14 +288,6 @@ using namespace eosio;
       locks.modify(parent_lock_object, _self, [&](auto &l){
         l.amount = parent_lock_object -> amount + amount_in_asset;
       });    
-
-      
-      action( //сжигаем токены на аккаунте genesis если производится списание
-        permission_level{ _genesis, "active"_n },
-        _token_contract, "retire"_n,
-        std::make_tuple( to_retire, std::string("")) 
-      ).send();
-    
     }
 
 
