@@ -7,7 +7,7 @@
 #include <eosiolib/system.hpp>
 
 // #define IS_DEBUG //commit for production
-#define PERCENT_PRECISION 10000
+//#define PERCENT_PRECISION 10000
 class [[eosio::contract]] tokenlock : public eosio::contract {
 
 public:

@@ -230,7 +230,7 @@ using namespace eosio;
     require_auth(_self);
     
     locks_index locks(_self, username.value);
-    history_index history(_self, _self.value);
+    history_index history(_self, username.value);
 
     //TODO check for user account exist
     eosio::asset amount_in_asset = asset(amount, _op_symbol);
