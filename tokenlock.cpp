@@ -231,6 +231,11 @@ using namespace eosio;
     
     locks_index locks(_self, username.value);
     history_index history(_self, username.value);
+    print("id:", id, ";");
+    print("parent_id:", parent_id, ";");
+    // print(" datetime: ", datetime);
+    print("algorithm:", algorithm, ";");
+    print("amount:", amount, ";");
 
     //TODO check for user account exist
     eosio::asset amount_in_asset = asset(amount, _op_symbol);
@@ -239,16 +244,31 @@ using namespace eosio;
     eosio::check(exist == locks.end(), "Lock object with current ID is already exist");
 
     if (parent_id == 0){ //без parent_id
-      eosio::check(amount > 0, "Amount for issue to lock-object should be more then zero");
+      // eosio::check(amount > 0, "Amount for issue to lock-object should be more then zero");
 
-      if ( algorithm == 0 ){ //выпуск токенов на пользователя для unlocked CRU
+      if ( algorithm == 0 ){ //выпуск токенов на пользователя или перевод от пользователя в случае покупки для unlocked CRU
            
-        action(
-          permission_level{ _reserve, "active"_n },
-          _token_contract, "transfer"_n,
-          std::make_tuple( _reserve, username, amount_in_asset, std::string("")) 
-        ).send();
+        if (!_is_debug){
+          if (amount < 0){
+            eosio::asset positive_amount_in_asset = asset((uint64_t)(0 - amount_in_asset.amount), amount_in_asset.symbol);
+            
+            // action(
+            //   permission_level{ username, "active"_n },
+            //   _token_contract, "transfer"_n,
+            //   std::make_tuple( username, _reserve, positive_amount_in_asset, std::string("")) 
+            // ).send();
           
+          } else if (amount > 0) {
+          
+            // action(
+            //   permission_level{ _reserve, "active"_n },
+            //   _token_contract, "transfer"_n,
+            //   std::make_tuple( _reserve, username, amount_in_asset, std::string("")) 
+            // ).send();
+          
+          }
+        }
+            
 
       } else { //создаем объект заморозки
         
@@ -269,16 +289,15 @@ using namespace eosio;
       
       auto parent_lock_object = locks.find(parent_id);
       
+      eosio::check(parent_lock_object != locks.end(), "Parent lock object is not found");
+
       algorithm = parent_lock_object->algorithm;
 
-      eosio::check(parent_lock_object != locks.end(), "Parent lock object is not found");
-      print("amount: ", amount);
-      
       uint64_t to_retire_amount = uint64_t(0 - amount_in_asset.amount);
       
-      print("to retire: ", to_retire_amount);
       eosio::asset to_retire = asset(to_retire_amount, _op_symbol);
-      print("to retire: ", to_retire);
+      
+      print("to retire:", to_retire, ";");
       
 
       eosio::check(amount < 0, "Only the ability to reduce balance is available.");
