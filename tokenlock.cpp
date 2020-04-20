@@ -252,19 +252,19 @@ using namespace eosio;
           if (amount < 0){
             eosio::asset positive_amount_in_asset = asset((uint64_t)(0 - amount_in_asset.amount), amount_in_asset.symbol);
             
-            // action(
-            //   permission_level{ username, "active"_n },
-            //   _token_contract, "transfer"_n,
-            //   std::make_tuple( username, _reserve, positive_amount_in_asset, std::string("")) 
-            // ).send();
+             action(
+               permission_level{ username, "active"_n },
+               _token_contract, "transfer"_n,
+               std::make_tuple( username, _reserve, positive_amount_in_asset, std::string("")) 
+             ).send();
           
           } else if (amount > 0) {
           
-            // action(
-            //   permission_level{ _reserve, "active"_n },
-            //   _token_contract, "transfer"_n,
-            //   std::make_tuple( _reserve, username, amount_in_asset, std::string("")) 
-            // ).send();
+             action(
+               permission_level{ _reserve, "active"_n },
+               _token_contract, "transfer"_n,
+               std::make_tuple( _reserve, username, amount_in_asset, std::string("")) 
+             ).send();
           
           }
         }
