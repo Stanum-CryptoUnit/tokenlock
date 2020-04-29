@@ -22,7 +22,7 @@ using namespace eosio;
    *
    */
   [[eosio::action]] void tokenlock::refresh(eosio::name username, uint64_t id){
-    // require_auth(username); 
+    // require_auth(username); //any
     
     users_index users(_self, _self.value);
     auto user = users.find(username.value);
@@ -60,7 +60,7 @@ using namespace eosio;
         uint64_t cycle_distance = migrated_at.sec_since_epoch() >= created_at.sec_since_epoch() ? (migrated_at.sec_since_epoch() - created_at.sec_since_epoch()) /  _cycle_length : 0;
         uint64_t freeze_cycles = freeze_seconds / _cycle_length;
 
-        last_distributed_cycle = 0;
+        last_distributed_cycle = 1;
         compressed_cycles = cycle_distance >= freeze_cycles ? cycle_distance - freeze_cycles : 0;
       
       } else { //Если распределение уже производилось
@@ -78,7 +78,15 @@ using namespace eosio;
       
       print("current_cycle: ", current_cycle);
 
-      while(last_distributed_cycle + 1 <= current_cycle ){
+      eosio::asset to_user_summ = asset(0, _op_symbol);
+      eosio::asset asset_amount_to_unfreeze_summ = asset(0, _op_symbol);
+      eosio::asset asset_amount_already_unfreezed_summ = asset(0, _op_symbol);
+
+      bool more = true;
+
+      while(last_distributed_cycle <= current_cycle && last_distributed_cycle < 36){
+
+
         last_distributed_cycle++;
 
         if (last_distributed_cycle >= 1 && last_distributed_cycle < 7 ) //6m
@@ -111,12 +119,40 @@ using namespace eosio;
           eosio::asset asset_amount_already_unfreezed = asset((uint64_t)amount_already_unfreezed, _op_symbol);
 
 
-          print("to_unfreeze: ", asset_amount_to_unfreeze);
-          print("already_unfreezed: ", asset_amount_already_unfreezed);    
-                
+
+          if (amount_already_unfreezed > 0){
+            eosio::asset to_user_already_unfreezed = asset_amount_already_unfreezed;
+
+            eosio::asset to_reserve = asset(0, _op_symbol);
+            eosio::asset debt_in_asset = get_debt(username);
+              
+            if (debt_in_asset.amount != 0){
+          
+              if (to_user_already_unfreezed.amount >= debt_in_asset.amount){
+                to_reserve = debt_in_asset;
+                to_user_already_unfreezed = to_user_already_unfreezed - to_reserve;
+              } else {
+                to_reserve = to_user_already_unfreezed;
+                to_user_already_unfreezed = asset(0, _op_symbol);
+              }
+              
+              modify_debt(username, to_reserve);
+
+            }
+            
+            if (to_user_already_unfreezed.amount > 0)
+              action(
+                  permission_level{ _reserve, "active"_n },
+                  _token_contract, "transfer"_n,
+                  std::make_tuple( _reserve, username, to_user_already_unfreezed, std::string("")) 
+              ).send();        
+
+
+
+          }
+
           eosio::time_point_sec last_distribution_at = eosio::time_point_sec((lock->created).sec_since_epoch() + last_distributed_cycle * _cycle_length + freeze_seconds);
 
-          //TODO calculate already withdrawed amount from database and keep it
           locks.modify(lock, _self, [&](auto &l){
             l.available += asset_amount_to_unfreeze;
             l.last_distribution_at = last_distribution_at;
@@ -127,7 +163,34 @@ using namespace eosio;
     }
   };
 
+  void tokenlock::modify_debt(eosio::name username, eosio::asset amount_to_add){
 
+    debts_index debts(_self, username.value);
+    auto debt = debts.find(username.value);
+
+    debts.modify(debt, _self, [&](auto &d){
+      d.amount += amount_to_add;
+    });
+
+  }
+
+  eosio::asset tokenlock::get_debt(eosio::name username){
+    
+    debts_index debts(_self, username.value);
+    auto debt = debts.find(username.value);
+    eosio::asset debt_in_asset;
+
+    if (debt != debts.end()){
+      debt_in_asset = debt -> amount;
+    } else {
+      debt_in_asset = asset(0, _op_symbol);
+    }
+
+    eosio::asset positive_debt_in_asset = asset((uint64_t)(0 - debt_in_asset.amount), debt_in_asset.symbol);
+
+    return positive_debt_in_asset;
+
+  }
   /*  
    *  withdraw(eosio::name username, uint64_t id)
    *    - username - пользователь, которому принадлежит выводимый объект начисления
@@ -151,16 +214,7 @@ using namespace eosio;
     locks_index locks(_self, username.value);
     auto lock = locks.find(id);
 
-    debts_index debts(_self, username.value);
-    auto debt = debts.find(username.value);
-    eosio::asset debt_in_asset;
-
-    if (debt != debts.end()){
-      debt_in_asset = debt -> amount;
-    } else {
-      debt_in_asset = asset(0, _op_symbol);
-    }
-
+    eosio::asset debt_in_asset = get_debt(username);
 
     if ((lock -> available).amount > 0){
       
@@ -181,9 +235,7 @@ using namespace eosio;
           to_user = asset(0, _op_symbol);
         }
 
-        debts.modify(debt, _self, [&](auto &d){
-          d.amount += to_reserve;
-        }); 
+        modify_debt(username, to_reserve);
 
       } else {
         to_user = to_withdraw;
@@ -289,11 +341,17 @@ using namespace eosio;
     
     locks_index locks(_self, username.value);
     history_index history(_self, username.value);
-    history_index history2(_self, _self.value);
+    
+    auto history_by_id_idx = history.template get_index<"byid"_n>();
+    auto exist_hist = history_by_id_idx.find(id);
+    eosio::check(exist_hist == history_by_id_idx.end(), "Operation with current ID is already exist");
+
+
+
+    // history_index history2(_self, _self.value);
 
     print("id:", id, ";");
     print("parent_id:", parent_id, ";");
-    // print(" datetime: ", datetime);
     print("algorithm:", algorithm, ";");
     print("amount:", amount, ";");
 
@@ -302,48 +360,53 @@ using namespace eosio;
     //TODO check for user account exist
     eosio::asset amount_in_asset = asset(amount, _op_symbol);
 
-    auto exist = locks.find(id);
-    eosio::check(exist == locks.end(), "Lock object with current ID is already exist");
+    auto exist_lock = locks.find(id);
+    eosio::check(exist_lock == locks.end(), "Lock object with current ID is already exist");
 
+      
     if (parent_id == 0){ //без parent_id
       
       if ( algorithm == 0 ){ //выпуск токенов на пользователя или перевод от пользователя в случае покупки для unlocked CRU
-           
+    
+          
+
+          debts_index debts(_self, username.value);
+          auto debt = debts.find(username.value);
+            
           if (amount < 0){
 
-            //Раскоментировать, если после миграции создание долга для пользователя будет запрещено, 
-            //а все покупки будут происходить только через контракт.
+            // Раскоментировать, если после миграции создание долга для пользователя будет запрещено, 
+            // а все покупки будут происходить только через контракты на блокчейне.
             // users_index users(_self, _self.value); 
             // auto user = users.find(username.value);
             // eosio::check(user == users.end(), "Cant create debt after migration");
 
 
-            debts_index debts(_self, username.value);
-            auto debt = debts.find(username.value);
             if (debt == debts.end()){
               debts.emplace(_self, [&](auto &d){
                 d.username = username;
                 d.amount = amount_in_asset;
               });
             } else {
-              debts.modify(debt, _self, [&](auto &d){
-                d.amount += amount_in_asset;
-              });
+              modify_debt(username, amount_in_asset);
             }
             print("debt_added: ", amount_in_asset);
           
           } else if (amount > 0) {
-          
-             action(
-               permission_level{ _reserve, "active"_n },
-               _token_contract, "transfer"_n,
-               std::make_tuple( _reserve, username, amount_in_asset, std::string("")) 
-             ).send();
+            eosio::asset to_user = amount_in_asset;
+
+            if (to_user.amount > 0)
+               action(
+                 permission_level{ _reserve, "active"_n },
+                 _token_contract, "transfer"_n,
+                 std::make_tuple( _reserve, username, to_user, std::string("")) 
+               ).send();
           
           }
       
       } else { //создаем объект заморозки
-        
+        eosio::check(amount_in_asset.amount > 0, "Only positive amounts can be added with non-zero algorithm");
+
         locks.emplace(_self, [&](auto &l){
           l.id = id;
           l.created = datetime;
@@ -391,15 +454,15 @@ using namespace eosio;
       l.amount = amount_in_asset;
     });
 
-     history2.emplace(_self, [&](auto &l){
-      l.id = history2.available_primary_key();
-      l.lock_id = id;
-      l.lock_parent_id = parent_id;
-      l.username = username;
-      l.created = datetime;
-      l.algorithm = algorithm;
-      l.amount = amount_in_asset;
-    });
+    //  history2.emplace(_self, [&](auto &l){
+    //   l.id = history2.available_primary_key();
+    //   l.lock_id = id;
+    //   l.lock_parent_id = parent_id;
+    //   l.username = username;
+    //   l.created = datetime;
+    //   l.algorithm = algorithm;
+    //   l.amount = amount_in_asset;
+    // });
   }
 
 
