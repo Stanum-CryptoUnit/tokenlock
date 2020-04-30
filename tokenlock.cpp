@@ -47,7 +47,7 @@ using namespace eosio;
     
     bool distribution_is_start = distribution_start_at <= eosio::time_point_sec(now());
     
-    print("distribution_is_start:", distribution_is_start);
+    print("distribution_is_start:", distribution_is_start, ";");
 
 
     uint64_t last_distributed_cycle;
@@ -69,14 +69,14 @@ using namespace eosio;
 
       }
 
-      print("last_distributed_cycle1: ", last_distributed_cycle);
+      print("last_distributed_cycle1: ", last_distributed_cycle, ";");
       
       uint64_t between_now_and_created_in_seconds = now() - created_at.sec_since_epoch() - freeze_seconds;
       uint64_t current_cycle = between_now_and_created_in_seconds / _cycle_length;
       
       double percent = 0;
       
-      print("current_cycle: ", current_cycle);
+      print("current_cycle: ", current_cycle, ";");
 
       eosio::asset to_user_summ = asset(0, _op_symbol);
       eosio::asset asset_amount_to_unfreeze_summ = asset(0, _op_symbol);
@@ -250,8 +250,8 @@ using namespace eosio;
         ).send();        
 
 
-      print("to_user: ", to_user);
-      print("debt_still_on_reserve: ", to_reserve);
+      print("to_user: ", to_user, ";");
+      print("debt_still_on_reserve: ", to_reserve, ";");
 
 
 
@@ -390,7 +390,7 @@ using namespace eosio;
             } else {
               modify_debt(username, amount_in_asset);
             }
-            print("debt_added: ", amount_in_asset);
+            print("debt_added: ", amount_in_asset, ";");
           
           } else if (amount > 0) {
             eosio::asset to_user = amount_in_asset;
