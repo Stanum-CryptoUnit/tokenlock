@@ -1,5 +1,5 @@
 {
-    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Wed Apr 29 16:40:04 2020",
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Thu Jun 11 11:35:30 2020",
     "version": "eosio::abi/1.1",
     "structs": [
         {
@@ -33,6 +33,20 @@
             ]
         },
         {
+            "name": "balance",
+            "base": "",
+            "fields": [
+                {
+                    "name": "username",
+                    "type": "name"
+                },
+                {
+                    "name": "quantity",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
             "name": "debts",
             "base": "",
             "fields": [
@@ -43,6 +57,24 @@
                 {
                     "name": "amount",
                     "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "dhistory",
+            "base": "",
+            "fields": [
+                {
+                    "name": "id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "amount",
+                    "type": "asset"
+                },
+                {
+                    "name": "timestamp",
+                    "type": "time_point_sec"
                 }
             ]
         },
@@ -143,6 +175,16 @@
             ]
         },
         {
+            "name": "updatebal",
+            "base": "",
+            "fields": [
+                {
+                    "name": "username",
+                    "type": "name"
+                }
+            ]
+        },
+        {
             "name": "users",
             "base": "",
             "fields": [
@@ -189,6 +231,11 @@
             "ricardian_contract": ""
         },
         {
+            "name": "updatebal",
+            "type": "updatebal",
+            "ricardian_contract": ""
+        },
+        {
             "name": "withdraw",
             "type": "withdraw",
             "ricardian_contract": ""
@@ -196,8 +243,22 @@
     ],
     "tables": [
         {
+            "name": "balance",
+            "type": "balance",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
             "name": "debts",
             "type": "debts",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "dhistory",
+            "type": "dhistory",
             "index_type": "i64",
             "key_names": [],
             "key_types": []

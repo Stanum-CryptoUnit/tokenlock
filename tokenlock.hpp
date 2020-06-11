@@ -6,7 +6,7 @@
 #include <eosiolib/print.hpp>
 #include <eosiolib/system.hpp>
 
-// #define IS_DEBUG //commit for production
+//#define IS_DEBUG //commit for production
 //#define PERCENT_PRECISION 10000
 class [[eosio::contract]] tokenlock : public eosio::contract {
 
@@ -17,28 +17,30 @@ public:
     [[eosio::action]] void migrate(eosio::name username, eosio::public_key public_key);
     [[eosio::action]] void refresh(eosio::name username, uint64_t id);
     [[eosio::action]] void withdraw(eosio::name username, uint64_t id);
-    
+    [[eosio::action]] void updatebal(eosio::name username);
 
     void apply(uint64_t receiver, uint64_t code, uint64_t action);   
     eosio::asset get_debt(eosio::name username);   
     void modify_debt(eosio::name username, eosio::asset amount_to_add);   
+    void modify_balance(eosio::name username, eosio::asset amount_to_add);   
+    
+    double get_current_percent(uint64_t last_distributed_cycle);
+
+    static constexpr eosio::name _self = "tokenlock"_n;   
+    static constexpr eosio::name _reserve = "reserve"_n;
+    static constexpr eosio::name _updater = "updater"_n;
+    static constexpr eosio::name _token_contract = "eosio.token"_n;
+    static constexpr eosio::symbol _op_symbol     = eosio::symbol(eosio::symbol_code("CRU"), 0);
+    
 
     #ifdef IS_DEBUG
         static constexpr bool _is_debug = true;
-        static constexpr eosio::name _self = "tokenlock"_n;
-        static constexpr eosio::name _reserve = "reserve"_n;
-        static constexpr eosio::name _token_contract = "eosio.token"_n;
-        static constexpr eosio::symbol _op_symbol     = eosio::symbol(eosio::symbol_code("CRU"), 0);
         static constexpr uint64_t _alg1_freeze_seconds = 10;
         static constexpr uint64_t _alg2_freeze_seconds = 15;
         static constexpr uint64_t _cycle_length = 5;
 
     #else 
         static constexpr bool _is_debug = false;
-        static constexpr eosio::name _self = "tokenlock"_n;   
-        static constexpr eosio::name _reserve = "reserve"_n;
-        static constexpr eosio::name _token_contract = "eosio.token"_n;
-        static constexpr eosio::symbol _op_symbol     = eosio::symbol(eosio::symbol_code("CRU"), 0);
         static constexpr uint64_t _alg1_freeze_seconds = 25920000;
         static constexpr uint64_t _alg2_freeze_seconds = 47088000;
         static constexpr uint64_t _cycle_length = 2592000;
@@ -73,6 +75,16 @@ public:
 
     typedef eosio::multi_index<"locks"_n, locks> locks_index;
 
+    struct [[eosio::table]] balance {
+        eosio::name username;
+        eosio::asset quantity;
+
+        uint64_t primary_key() const {return username.value;}
+        
+        EOSLIB_SERIALIZE(balance, (username)(quantity))
+    };
+
+    typedef eosio::multi_index<"balance"_n, balance> balance_index;
 
     struct [[eosio::table]] debts {
         eosio::name username;
@@ -84,6 +96,20 @@ public:
     };
 
     typedef eosio::multi_index<"debts"_n, debts> debts_index;
+
+
+
+    struct [[eosio::table]] dhistory{
+        uint64_t id;
+        eosio::asset amount;
+        eosio::time_point_sec timestamp;
+
+        uint64_t primary_key() const {return id;}
+
+        EOSLIB_SERIALIZE(dhistory, (id)(amount)(timestamp))
+    };
+
+    typedef eosio::multi_index<"dhistory"_n, dhistory> dhistory_index;
 
 
     struct [[eosio::table]] history {
