@@ -18,6 +18,7 @@ public:
     [[eosio::action]] void refresh(eosio::name username, uint64_t id);
     [[eosio::action]] void withdraw(eosio::name username, uint64_t id);
     [[eosio::action]] void updatebal(eosio::name username);
+    [[eosio::action]] void setbal(eosio::name username, eosio::asset balance);
 
     void apply(uint64_t receiver, uint64_t code, uint64_t action);   
     eosio::asset get_debt(eosio::name username);   

@@ -1,5 +1,5 @@
 {
-    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Thu Jun 11 11:35:30 2020",
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Tue Jun 16 07:45:32 2020",
     "version": "eosio::abi/1.1",
     "structs": [
         {
@@ -175,6 +175,20 @@
             ]
         },
         {
+            "name": "setbal",
+            "base": "",
+            "fields": [
+                {
+                    "name": "username",
+                    "type": "name"
+                },
+                {
+                    "name": "balance",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
             "name": "updatebal",
             "base": "",
             "fields": [
@@ -228,6 +242,11 @@
         {
             "name": "refresh",
             "type": "refresh",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "setbal",
+            "type": "setbal",
             "ricardian_contract": ""
         },
         {

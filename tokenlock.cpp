@@ -179,10 +179,11 @@ using namespace eosio;
     auto bal = balances.find(username.value);
     
     if (bal != balances.end()){
-      
+
       balances.modify(bal, _self, [&](auto &b){
         b.quantity += balance_to_add;
       });  
+
     } else {
       balances.emplace(_self, [&](auto &b){
         b.username = username;
@@ -198,13 +199,23 @@ using namespace eosio;
     debts_index debts(_self, username.value);
     auto debt = debts.find(username.value);
 
-    debts.modify(debt, _self, [&](auto &d){
-      d.amount += amount_to_add;
-    });
+    if (debt == debts.end()){
 
+      debts.emplace(_self, [&](auto &d){
+        d.username = username;
+        d.amount = amount_to_add;
+      });
+
+    } else {
+      debts.modify(debt, _self, [&](auto &d){
+        d.amount += amount_to_add;
+      });
+  
+    }
+    
     dhistory_index dhistory(_self, username.value);
     
-    auto debt_history = dhistory.emplace(_self, [&](auto &dh){
+    dhistory.emplace(_self, [&](auto &dh){
       dh.id = dhistory.available_primary_key();
       dh.amount = amount_to_add;
       dh.timestamp = eosio::time_point_sec(now());
@@ -362,6 +373,32 @@ using namespace eosio;
   };
 
 
+  [[eosio::action]] void tokenlock::setbal(eosio::name username, eosio::asset balance){
+    require_auth(_updater);
+
+    eosio::check( is_account( username ), "user account does not exist");
+    eosio::check(balance.symbol == _op_symbol, "wrong symbol");
+
+    balance_index balances(_self, username.value);
+    auto bal = balances.find(username.value);
+    
+    if (bal != balances.end()){
+
+      balances.modify(bal, _self, [&](auto &b){
+        b.quantity = balance;
+      });  
+
+    } else {
+      balances.emplace(_self, [&](auto &b){
+        b.username = username;
+        b.quantity = balance;
+      });
+    }
+
+    print(balance);
+  }
+
+
   [[eosio::action]] void tokenlock::updatebal(eosio::name username){
     require_auth(_updater);
 
@@ -369,6 +406,7 @@ using namespace eosio;
     auto hist_bv = history.begin();
 
     eosio::asset summ = asset(0, _op_symbol);
+    eosio::check( is_account( username ), "user account does not exist");
 
     while(hist_bv != history.end()) {
 
@@ -384,16 +422,20 @@ using namespace eosio;
 
     balance_index balances(_self, username.value);
     auto bal = balances.find(username.value);
-    if (bal == balances.end()){
-      balances.emplace(_updater, [&](auto &b){
+    
+    if (bal != balances.end()){
+
+      balances.modify(bal, _self, [&](auto &b){
+        b.quantity = summ;
+      });  
+
+    } else {
+      balances.emplace(_self, [&](auto &b){
         b.username = username;
         b.quantity = summ;
       });
-    } else {
-      balances.modify(bal, _updater, [&](auto &b){
-        b.quantity = summ;
-      });
     }
+
     print(summ);
   }
 
@@ -458,14 +500,8 @@ using namespace eosio;
             // eosio::check(user == users.end(), "Cant create debt after migration");
 
 
-            if (debt == debts.end()){
-              debts.emplace(_self, [&](auto &d){
-                d.username = username;
-                d.amount = amount_in_asset;
-              });
-            } else {
-              modify_debt(username, amount_in_asset);
-            }
+            modify_debt(username, amount_in_asset);
+            
             print("debt_added: ", amount_in_asset, ";");
           
           } else if (amount > 0) {
@@ -521,7 +557,9 @@ using namespace eosio;
       } else {
         //пользователю начисляется бонус по стейкингу, потом он отказывается от стейкинга и с него списывается определенная сумма (штраф). Вот этот штраф имеет родителя - бонус по стейкингу.
         if (amount < 0){
+
           modify_debt(username, amount_in_asset);
+        
         }
       }       
     }
