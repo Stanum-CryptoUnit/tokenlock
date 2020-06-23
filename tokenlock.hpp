@@ -6,7 +6,7 @@
 #include <eosiolib/print.hpp>
 #include <eosiolib/system.hpp>
 
-#define IS_DEBUG //commit for production
+//#define IS_DEBUG //commit for production
 //#define PERCENT_PRECISION 10000
 class [[eosio::contract]] tokenlock : public eosio::contract {
 
@@ -46,7 +46,7 @@ public:
     static constexpr eosio::name _updater = "updater"_n;
     static constexpr eosio::name _token_contract = "eosio.token"_n;
     static constexpr eosio::symbol _op_symbol     = eosio::symbol(eosio::symbol_code("CRU"), 0);
-    static constexpr eosio::symbol _core_symbol     = eosio::symbol(eosio::symbol_code("FLO"), 0);
+    static constexpr eosio::symbol _core_symbol     = eosio::symbol(eosio::symbol_code("UNTB"), 0);
     static constexpr eosio::symbol _usdu_symbol     = eosio::symbol(eosio::symbol_code("USDU"), 0);
     
     
