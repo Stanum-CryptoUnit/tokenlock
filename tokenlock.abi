@@ -1,7 +1,17 @@
 {
-    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Tue Jun 16 07:45:32 2020",
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Tue Jun 23 12:52:13 2020",
     "version": "eosio::abi/1.1",
     "structs": [
+        {
+            "name": "account",
+            "base": "",
+            "fields": [
+                {
+                    "name": "balance",
+                    "type": "asset"
+                }
+            ]
+        },
         {
             "name": "add",
             "base": "",
@@ -42,6 +52,20 @@
                 },
                 {
                     "name": "quantity",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "chlbal",
+            "base": "",
+            "fields": [
+                {
+                    "name": "username",
+                    "type": "name"
+                },
+                {
+                    "name": "balance",
                     "type": "asset"
                 }
             ]
@@ -189,6 +213,24 @@
             ]
         },
         {
+            "name": "tbalance",
+            "base": "",
+            "fields": [
+                {
+                    "name": "username",
+                    "type": "name"
+                },
+                {
+                    "name": "cru_total",
+                    "type": "asset"
+                },
+                {
+                    "name": "cru_frozen",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
             "name": "updatebal",
             "base": "",
             "fields": [
@@ -235,6 +277,11 @@
             "ricardian_contract": ""
         },
         {
+            "name": "chlbal",
+            "type": "chlbal",
+            "ricardian_contract": ""
+        },
+        {
             "name": "migrate",
             "type": "migrate",
             "ricardian_contract": ""
@@ -261,6 +308,13 @@
         }
     ],
     "tables": [
+        {
+            "name": "accounts",
+            "type": "account",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
         {
             "name": "balance",
             "type": "balance",
@@ -292,6 +346,13 @@
         {
             "name": "locks",
             "type": "locks",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "tbalance",
+            "type": "tbalance",
             "index_type": "i64",
             "key_names": [],
             "key_types": []
