@@ -20,6 +20,50 @@ using namespace eosio;
     return 0;
   }
 
+void tokenlock::chlbal(eosio::name username, eosio::asset balance){
+  //require_auth(tokenlock::_token_contract); //auth self or token
+  
+  tokenlock::modify_balance(username, balance, 0);
+}
+
+void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint64_t type){
+    //types: 0 - only liquid, 1 - only total, 2 - only frozen
+    
+    
+    tokenlock::tbalance_index balances(tokenlock::_self, tokenlock::_self.value);
+    
+    auto bal = balances.find(username.value);
+
+    if (bal != balances.end()){
+
+      balances.modify(bal, tokenlock::_self, [&](auto &b){
+        if (balance.symbol == _op_symbol){
+          if (type == 0){
+            b.cru_total += balance;
+          } else if (type == 1) {
+            b.cru_frozen += balance;
+          } 
+        } 
+      });  
+
+    } else {
+      balances.emplace(tokenlock::_self, [&](auto &b){
+        b.username = username;
+        
+        if (balance.symbol == _op_symbol){
+          if (type == 0){
+            b.cru_total = balance;
+            b.cru_frozen = asset(0, _op_symbol);
+          } else if (type == 1) {
+            b.cru_total = asset(0, _op_symbol);;
+            b.cru_frozen = balance;
+          } 
+        }
+      });
+    
+    }
+}
+
   /*  
    *  refresh(eosio::name username, uint64_t id)
    *    - eosio::name username - пользователь, которому принадлежит обновляемый объект начисления
@@ -161,38 +205,25 @@ using namespace eosio;
             asset_last_part = lock -> amount - lock->withdrawed - asset_amount_already_unfreezed - asset_amount_to_unfreeze;
           }
 
-          modify_balance(username, - asset_amount_already_unfreezed - asset_amount_to_unfreeze - asset_last_part);
+          auto withdrawed = asset_amount_already_unfreezed + asset_amount_to_unfreeze + asset_last_part;
+
+          //modify_balance(username, - withdrawed);
+          modify_balance(username, - withdrawed, 0);
+          modify_balance(username, - withdrawed, 1);
+          
           
           locks.modify(lock, _self, [&](auto &l){
             l.available += asset_amount_to_unfreeze;
             l.last_distribution_at = eosio::time_point_sec((lock->created).sec_since_epoch() + last_distributed_cycle * _cycle_length + freeze_seconds);
-            l.withdrawed = lock->withdrawed + asset_amount_already_unfreezed + asset_amount_to_unfreeze + asset_last_part;
+            l.withdrawed = lock->withdrawed + withdrawed;
           });
+
+           
         }
       }
     }
   };
 
-  void tokenlock::modify_balance(eosio::name username, eosio::asset balance_to_add){
-    balance_index balances(_self, username.value);
-
-    auto bal = balances.find(username.value);
-    
-    if (bal != balances.end()){
-
-      balances.modify(bal, _self, [&](auto &b){
-        b.quantity += balance_to_add;
-      });  
-
-    } else {
-      balances.emplace(_self, [&](auto &b){
-        b.username = username;
-        b.quantity = balance_to_add;
-      });
-    }
-    
-  
-  }
 
   void tokenlock::modify_debt(eosio::name username, eosio::asset amount_to_add){
 
@@ -318,8 +349,8 @@ using namespace eosio;
       }
 
 
-      modify_balance(username, - to_withdraw);
-      
+      modify_balance(username, - to_withdraw, 0);
+      modify_balance(username, - to_withdraw, 1);
      
     } else {
       eosio::check(false, "Not possible to withdraw a zero amount");
@@ -373,30 +404,37 @@ using namespace eosio;
   };
 
 
-  [[eosio::action]] void tokenlock::setbal(eosio::name username, eosio::asset balance){
+  [[eosio::action]] void tokenlock::setbal(eosio::name username, eosio::asset total_balance, eosio::asset frozen_balance){
     require_auth(_updater);
 
     eosio::check( is_account( username ), "user account does not exist");
-    eosio::check(balance.symbol == _op_symbol, "wrong symbol");
+    eosio::check(total_balance.symbol == _op_symbol, "wrong symbol");
+    eosio::check(frozen_balance.symbol == _op_symbol, "wrong symbol");
 
-    balance_index balances(_self, username.value);
-    auto bal = balances.find(username.value);
+    tbalance_index tbalances(_self, _self.value);
+    auto tbal = tbalances.find(username.value);
     
-    if (bal != balances.end()){
+    if (tbal != tbalances.end())
+      tbalances.erase(tbal);
 
-      balances.modify(bal, _self, [&](auto &b){
-        b.quantity = balance;
-      });  
+    tbalances.emplace(_self, [&](auto &b){
+      b.username = username;
+      b.cru_total = total_balance;
+      b.cru_frozen = frozen_balance;
+    });
 
-    } else {
-      balances.emplace(_self, [&](auto &b){
-        b.username = username;
-        b.quantity = balance;
-      });
-    }
-
-    print(balance);
   }
+
+  eosio::asset tokenlock::get_liquid_balance( eosio::name token_contract_account, eosio::name owner, eosio::symbol_code sym_code )
+    {
+      accounts accountstable( token_contract_account, owner.value );
+      auto ac = accountstable.find( sym_code.raw() );
+      eosio::asset res = asset(0, _op_symbol);
+      if (ac != accountstable.end()){
+        res = ac -> balance;
+      }
+      return res;
+    }
 
 
   [[eosio::action]] void tokenlock::updatebal(eosio::name username){
@@ -405,38 +443,48 @@ using namespace eosio;
     history_index history(_self, username.value);
     auto hist_bv = history.begin();
 
-    eosio::asset summ = asset(0, _op_symbol);
+    eosio::asset total = asset(0, _op_symbol);
+    eosio::asset frozen = asset(0, _op_symbol);
     eosio::check( is_account( username ), "user account does not exist");
 
     while(hist_bv != history.end()) {
 
       if (hist_bv -> algorithm == 0){
         if (hist_bv -> amount.amount < 0)
-          summ += hist_bv -> amount;
+          total += hist_bv -> amount;
       } else {
-        summ += hist_bv -> amount;
+        total += hist_bv -> amount;
+        frozen += hist_bv -> amount;
       }
     
       hist_bv++;
     }        
 
-    balance_index balances(_self, username.value);
+    
+    auto liquid_balance = get_liquid_balance(_token_contract, username, _op_symbol.code());
+    print("liquid_balance", liquid_balance, ";");
+
+    tbalance_index tbalances(_self, _self.value);
+    auto tbal = tbalances.find(username.value);
+
+    if (tbal != tbalances.end())
+      tbalances.erase(tbal);
+
+    tbalances.emplace(_self, [&](auto &b){
+      b.username = username;
+      b.cru_total = total + liquid_balance;
+      b.cru_frozen = frozen;
+    });
+  
+
+    balance_index balances(_self, _self.value);
     auto bal = balances.find(username.value);
     
     if (bal != balances.end()){
+      balances.erase(bal);
+    } 
 
-      balances.modify(bal, _self, [&](auto &b){
-        b.quantity = summ;
-      });  
 
-    } else {
-      balances.emplace(_self, [&](auto &b){
-        b.username = username;
-        b.quantity = summ;
-      });
-    }
-
-    print(summ);
   }
 
   /*
@@ -476,8 +524,8 @@ using namespace eosio;
     //TODO check for user account exist
     eosio::asset amount_in_asset = asset(amount, _op_symbol);
 
-    modify_balance(username, amount_in_asset);
-
+    
+    
     auto exist_lock = locks.find(id);
     eosio::check(exist_lock == locks.end(), "Lock object with current ID is already exist");
 
@@ -502,6 +550,9 @@ using namespace eosio;
 
             modify_debt(username, amount_in_asset);
             
+            modify_balance(username, amount_in_asset, 0);
+            
+
             print("debt_added: ", amount_in_asset, ";");
           
           } else if (amount > 0) {
@@ -528,7 +579,10 @@ using namespace eosio;
           l.available = asset(0, _op_symbol);
           l.withdrawed = asset(0, _op_symbol);
         });  
-              
+        
+        modify_balance(username, amount_in_asset, 0);
+        modify_balance(username, amount_in_asset, 1);
+
       }      
 
 
@@ -554,11 +608,15 @@ using namespace eosio;
           l.amount = parent_lock_object -> amount + amount_in_asset;
         }); 
 
+        modify_balance(username, amount_in_asset, 0);
+        modify_balance(username, amount_in_asset, 1);
+
       } else {
         //пользователю начисляется бонус по стейкингу, потом он отказывается от стейкинга и с него списывается определенная сумма (штраф). Вот этот штраф имеет родителя - бонус по стейкингу.
         if (amount < 0){
 
           modify_debt(username, amount_in_asset);
+          modify_balance(username, amount_in_asset, 0);
         
         }
       }       
@@ -593,7 +651,13 @@ extern "C" {
             execute_action(name(receiver), name(code), &tokenlock::withdraw);
           } else if (action == "updatebal"_n.value){
             execute_action(name(receiver), name(code), &tokenlock::updatebal);
-          }          
+          } else if (action == "setbal"_n.value){
+            execute_action(name(receiver), name(code), &tokenlock::setbal);
+          } else if (action == "chlbal"_n.value){
+            if (code == tokenlock::_self.value)
+              execute_action(name(receiver), name(code), &tokenlock::chlbal);
+            
+          }             
         } else {
           if (action == "transfer"_n.value){
             
