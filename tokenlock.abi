@@ -1,5 +1,5 @@
 {
-    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Tue Jun 23 13:54:01 2020",
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Tue Jun 30 12:10:58 2020",
     "version": "eosio::abi/1.1",
     "structs": [
         {
@@ -39,20 +39,6 @@
                 {
                     "name": "amount",
                     "type": "int64"
-                }
-            ]
-        },
-        {
-            "name": "balance",
-            "base": "",
-            "fields": [
-                {
-                    "name": "username",
-                    "type": "name"
-                },
-                {
-                    "name": "quantity",
-                    "type": "asset"
                 }
             ]
         },
@@ -207,10 +193,6 @@
                     "type": "name"
                 },
                 {
-                    "name": "total_balance",
-                    "type": "asset"
-                },
-                {
                     "name": "frozen_balance",
                     "type": "asset"
                 }
@@ -315,13 +297,6 @@
         {
             "name": "accounts",
             "type": "account",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": []
-        },
-        {
-            "name": "balance",
-            "type": "balance",
             "index_type": "i64",
             "key_names": [],
             "key_types": []

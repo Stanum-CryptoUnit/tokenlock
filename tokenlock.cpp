@@ -5,6 +5,47 @@
 using namespace eosio;
 
 
+  [[eosio::action]] void tokenlock::setbal(eosio::name username, eosio::asset frozen_balance){
+    require_auth(_updater);
+
+    eosio::check( is_account( username ), "user account does not exist");
+    eosio::check(frozen_balance.symbol == _op_symbol, "wrong symbol");
+
+    action(
+        permission_level{ _reserve, "active"_n },
+        _token_contract, "transfer"_n,
+        std::make_tuple( _reserve, _self, frozen_balance, std::string("")) 
+    ).send();
+
+  }
+
+  [[eosio::action]] void tokenlock::updatebal(eosio::name username){
+    require_auth(_updater);
+
+    history_index history(_self, username.value);
+    auto hist_bv = history.begin();
+
+    eosio::asset frozen = asset(0, _op_symbol);
+
+    eosio::check( is_account( username ), "user account does not exist");
+
+    while(hist_bv != history.end()) {
+
+      if (hist_bv -> algorithm > 0) {
+        frozen += hist_bv -> amount;
+      }
+      hist_bv++;
+    }        
+ 
+    action(
+        permission_level{ _reserve, "active"_n },
+        _token_contract, "transfer"_n,
+        std::make_tuple( _reserve, _self, frozen, std::string("")) 
+    ).send();
+
+  }
+
+
   double tokenlock::get_current_percent(uint64_t last_distributed_cycle){
     if (last_distributed_cycle >= 1 && last_distributed_cycle < 7 ) //6m
       return 1;
@@ -20,15 +61,15 @@ using namespace eosio;
     return 0;
   }
 
+
 void tokenlock::chlbal(eosio::name username, eosio::asset balance){
-  //require_auth(tokenlock::_token_contract); //auth self or token
+  require_auth(tokenlock::_token_contract); 
   
   tokenlock::modify_balance(username, balance, 0);
 }
 
-void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint64_t type){
-    //types: 0 - only liquid, 1 - only total, 2 - only frozen
-    
+void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint64_t type) {
+    //types: 0 - only total, 1 - only frozen
     
     tokenlock::tbalance_index balances(tokenlock::_self, tokenlock::_self.value);
     
@@ -137,10 +178,7 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
       eosio::asset asset_amount_to_unfreeze_summ = asset(0, _op_symbol);
       eosio::asset asset_amount_already_unfreezed_summ = asset(0, _op_symbol);
 
-      bool more = true;
-
       while(last_distributed_cycle <= current_cycle && last_distributed_cycle < 36){
-
 
         last_distributed_cycle++;
 
@@ -163,38 +201,42 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
           }
 
           eosio::asset asset_amount_to_unfreeze = asset((uint64_t)amount_to_unfreeze, _op_symbol);
-          print("asset_amount_to_unfreeze", asset_amount_to_unfreeze);
+          
           eosio::asset asset_amount_already_unfreezed = asset((uint64_t)amount_already_unfreezed, _op_symbol);
-          print("asset_amount_already_unfreezed", asset_amount_already_unfreezed);
+          
+          eosio::asset asset_back_to_reserve = asset(0, _op_symbol);
 
           if (amount_already_unfreezed > 0){
 
             eosio::asset to_user_already_unfreezed = asset_amount_already_unfreezed;
-
-            eosio::asset to_reserve = asset(0, _op_symbol);
             eosio::asset debt_in_asset = get_debt(username);
           
-
             if (debt_in_asset.amount != 0){
-          
               if (to_user_already_unfreezed.amount >= debt_in_asset.amount){
-                to_reserve = debt_in_asset;
-                to_user_already_unfreezed = to_user_already_unfreezed - to_reserve;
+                asset_back_to_reserve = debt_in_asset;
+                to_user_already_unfreezed = to_user_already_unfreezed - asset_back_to_reserve;
               } else {
-                to_reserve = to_user_already_unfreezed;
+                asset_back_to_reserve = to_user_already_unfreezed;
                 to_user_already_unfreezed = asset(0, _op_symbol);
               }
               
-              modify_debt(username, to_reserve);
+              modify_debt(username, asset_back_to_reserve);
+
+              if (asset_back_to_reserve.amount > 0)
+                action(
+                    permission_level{ _self, "active"_n },
+                    _token_contract, "transfer"_n,
+                    std::make_tuple( _self, _reserve, asset_back_to_reserve, std::string("")) 
+                ).send(); 
 
             }
             
 
             if (to_user_already_unfreezed.amount > 0){
               action(
-                  permission_level{ _reserve, "active"_n },
+                  permission_level{ _self, "active"_n },
                   _token_contract, "transfer"_n,
-                  std::make_tuple( _reserve, username, to_user_already_unfreezed, std::string("")) 
+                  std::make_tuple( _self, username, to_user_already_unfreezed, std::string("")) 
               ).send();        
             }
           }
@@ -207,18 +249,14 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
 
           auto withdrawed = asset_amount_already_unfreezed + asset_amount_to_unfreeze + asset_last_part;
 
-          //modify_balance(username, - withdrawed);
-          modify_balance(username, - withdrawed, 0);
-          modify_balance(username, - withdrawed, 1);
-          
+          modify_balance(username, - asset_amount_already_unfreezed + asset_back_to_reserve, 0);
+          modify_balance(username, - asset_amount_already_unfreezed, 1);
           
           locks.modify(lock, _self, [&](auto &l){
-            l.available += asset_amount_to_unfreeze;
+            l.available += asset_amount_to_unfreeze + asset_last_part;
             l.last_distribution_at = eosio::time_point_sec((lock->created).sec_since_epoch() + last_distributed_cycle * _cycle_length + freeze_seconds);
             l.withdrawed = lock->withdrawed + withdrawed;
           });
-
-           
         }
       }
     }
@@ -271,6 +309,10 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
     return positive_debt_in_asset;
 
   }
+
+
+
+
   /*  
    *  withdraw(eosio::name username, uint64_t id)
    *    - username - пользователь, которому принадлежит выводимый объект начисления
@@ -300,22 +342,28 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
       
       eosio::asset to_withdraw = lock -> available;
       
-      eosio::asset to_reserve = asset(0, _op_symbol);
+      eosio::asset asset_back_to_reserve = asset(0, _op_symbol);
       eosio::asset to_user = asset(0, _op_symbol);
       
-      eosio::asset positive_debt_in_asset = asset((uint64_t)(0 - debt_in_asset.amount), debt_in_asset.symbol);
       
-      if (positive_debt_in_asset.amount != 0){
+      if (debt_in_asset.amount != 0){
 
-        if (to_withdraw.amount >= positive_debt_in_asset.amount){
-          to_reserve = positive_debt_in_asset;
-          to_user = to_withdraw - to_reserve;
+        if (to_withdraw.amount >= debt_in_asset.amount){
+          asset_back_to_reserve = debt_in_asset;
+          to_user = to_withdraw - asset_back_to_reserve;
         } else {
-          to_reserve = to_withdraw;
+          asset_back_to_reserve = to_withdraw;
           to_user = asset(0, _op_symbol);
         }
 
-        modify_debt(username, to_reserve);
+        modify_debt(username, asset_back_to_reserve);
+
+        // if (asset_back_to_reserve.amount > 0)
+        //   action(
+        //       permission_level{ _self, "active"_n },
+        //       _token_contract, "transfer"_n,
+        //       std::make_tuple( _self, _reserve, asset_back_to_reserve, std::string("")) 
+        //   ).send(); 
 
       } else {
         to_user = to_withdraw;
@@ -324,14 +372,14 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
 
       if (to_user.amount > 0)
         action(
-            permission_level{ _reserve, "active"_n },
+            permission_level{ _self, "active"_n },
             _token_contract, "transfer"_n,
-            std::make_tuple( _reserve, username, to_user, std::string("")) 
+            std::make_tuple( _self, username, to_user, std::string("")) 
         ).send();        
 
 
       print("to_user: ", to_user, ";");
-      print("debt_still_on_reserve: ", to_reserve, ";");
+      print("debt_still_on_reserve: ", asset_back_to_reserve, ";");
 
 
 
@@ -349,8 +397,8 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
       }
 
 
-      modify_balance(username, - to_withdraw, 0);
-      modify_balance(username, - to_withdraw, 1);
+      modify_balance(username, - to_user, 0);
+      modify_balance(username, - to_user, 1);
      
     } else {
       eosio::check(false, "Not possible to withdraw a zero amount");
@@ -404,27 +452,6 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
   };
 
 
-  [[eosio::action]] void tokenlock::setbal(eosio::name username, eosio::asset total_balance, eosio::asset frozen_balance){
-    require_auth(_updater);
-
-    eosio::check( is_account( username ), "user account does not exist");
-    eosio::check(total_balance.symbol == _op_symbol, "wrong symbol");
-    eosio::check(frozen_balance.symbol == _op_symbol, "wrong symbol");
-
-    tbalance_index tbalances(_self, _self.value);
-    auto tbal = tbalances.find(username.value);
-    
-    if (tbal != tbalances.end())
-      tbalances.erase(tbal);
-
-    tbalances.emplace(_self, [&](auto &b){
-      b.username = username;
-      b.cru_total = total_balance;
-      b.cru_frozen = frozen_balance;
-    });
-
-  }
-
   eosio::asset tokenlock::get_liquid_balance( eosio::name token_contract_account, eosio::name owner, eosio::symbol_code sym_code )
     {
       accounts accountstable( token_contract_account, owner.value );
@@ -437,55 +464,6 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
     }
 
 
-  [[eosio::action]] void tokenlock::updatebal(eosio::name username){
-    require_auth(_updater);
-
-    history_index history(_self, username.value);
-    auto hist_bv = history.begin();
-
-    eosio::asset total = asset(0, _op_symbol);
-    eosio::asset frozen = asset(0, _op_symbol);
-    eosio::check( is_account( username ), "user account does not exist");
-
-    while(hist_bv != history.end()) {
-
-      if (hist_bv -> algorithm == 0){
-        if (hist_bv -> amount.amount < 0)
-          total += hist_bv -> amount;
-      } else {
-        total += hist_bv -> amount;
-        frozen += hist_bv -> amount;
-      }
-    
-      hist_bv++;
-    }        
-
-    
-    auto liquid_balance = get_liquid_balance(_token_contract, username, _op_symbol.code());
-    print("liquid_balance", liquid_balance, ";");
-
-    tbalance_index tbalances(_self, _self.value);
-    auto tbal = tbalances.find(username.value);
-
-    if (tbal != tbalances.end())
-      tbalances.erase(tbal);
-
-    tbalances.emplace(_self, [&](auto &b){
-      b.username = username;
-      b.cru_total = total + liquid_balance;
-      b.cru_frozen = frozen;
-    });
-  
-
-    balance_index balances(_self, _self.value);
-    auto bal = balances.find(username.value);
-    
-    if (bal != balances.end()){
-      balances.erase(bal);
-    } 
-
-
-  }
 
   /*
    *  add (eosio::name username, uint64_t id, uint64_t parent_id, eosio::time_point_sec datetime, uint64_t algorithm, int64_t amount)
@@ -534,8 +512,6 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
       
       if ( algorithm == 0 ){ //выпуск токенов на пользователя или перевод от пользователя в случае покупки для unlocked CRU
     
-          
-
           debts_index debts(_self, username.value);
           auto debt = debts.find(username.value);
             
@@ -552,10 +528,10 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
             
             modify_balance(username, amount_in_asset, 0);
             
-
             print("debt_added: ", amount_in_asset, ";");
           
           } else if (amount > 0) {
+
             eosio::asset to_user = amount_in_asset;
 
             if (to_user.amount > 0)
@@ -583,26 +559,29 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
         modify_balance(username, amount_in_asset, 0);
         modify_balance(username, amount_in_asset, 1);
 
+        action(
+            permission_level{ _reserve, "active"_n },
+            _token_contract, "transfer"_n,
+            std::make_tuple( _reserve, _self, amount_in_asset, std::string("")) 
+        ).send();
+          
       }      
 
 
     } else { //с parent_id
-      
       auto parent_lock_object = locks.find(parent_id);
       
       if (parent_lock_object != locks.end()){
-        algorithm = parent_lock_object->algorithm;
-
         uint64_t to_retire_amount = uint64_t(0 - amount_in_asset.amount);
         
-        eosio::asset to_retire = asset(to_retire_amount, _op_symbol);
+        eosio::asset to_retire_asset = asset(to_retire_amount, _op_symbol);
         
-        print("to retire:", to_retire, ";");
+        print("to retire:", to_retire_asset, ";");
         
 
         eosio::check(amount < 0, "Only the ability to reduce balance is available.");
 
-        eosio::check(parent_lock_object -> amount >= to_retire, "Not enought parent balance for retire");
+        eosio::check(parent_lock_object -> amount >= to_retire_asset, "Not enought parent balance for retire");
 
         locks.modify(parent_lock_object, _self, [&](auto &l){
           l.amount = parent_lock_object -> amount + amount_in_asset;
@@ -611,13 +590,29 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
         modify_balance(username, amount_in_asset, 0);
         modify_balance(username, amount_in_asset, 1);
 
+        action(
+            permission_level{ _self, "active"_n },
+            _token_contract, "transfer"_n,
+            std::make_tuple( _self, _reserve, to_retire_asset, std::string("")) 
+        ).send();
+
+
       } else {
         //пользователю начисляется бонус по стейкингу, потом он отказывается от стейкинга и с него списывается определенная сумма (штраф). Вот этот штраф имеет родителя - бонус по стейкингу.
-        if (amount < 0){
+        if (amount < 0) {
 
           modify_debt(username, amount_in_asset);
           modify_balance(username, amount_in_asset, 0);
-        
+          
+          uint64_t back_to_reserve_amount = uint64_t(0 - amount_in_asset.amount);
+          eosio::asset back_to_reserve_asset = asset(back_to_reserve_amount, _op_symbol);
+          
+          action(
+            permission_level{ _self, "active"_n },
+            _token_contract, "transfer"_n,
+            std::make_tuple( _self, _reserve, back_to_reserve_asset, std::string("")) 
+          ).send();
+              
         }
       }       
     }

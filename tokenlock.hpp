@@ -18,7 +18,7 @@ public:
     [[eosio::action]] void refresh(eosio::name username, uint64_t id);
     [[eosio::action]] void withdraw(eosio::name username, uint64_t id);
     [[eosio::action]] void updatebal(eosio::name username);
-    [[eosio::action]] void setbal(eosio::name username, eosio::asset total_balance, eosio::asset frozen_balance);
+    [[eosio::action]] void setbal(eosio::name username, eosio::asset frozen_balance);
     [[eosio::action]] void chlbal(eosio::name username, eosio::asset balance);
     
     using chlbal_action = eosio::action_wrapper<"chlbal"_n, &tokenlock::chlbal>;
@@ -33,21 +33,13 @@ public:
 
     typedef eosio::multi_index< "accounts"_n, account > accounts;
 
-
-    void apply(uint64_t receiver, uint64_t code, uint64_t action);   
-    eosio::asset get_debt(eosio::name username);   
-    void modify_debt(eosio::name username, eosio::asset amount_to_add);   
-    void modify_balance(eosio::name username, eosio::asset amount_to_add, uint64_t type);   
+    static constexpr eosio::symbol _op_symbol     = eosio::symbol(eosio::symbol_code("CRU"), 0);
     
-    double get_current_percent(uint64_t last_distributed_cycle);
-
     static constexpr eosio::name _self = "tokenlock"_n;   
     static constexpr eosio::name _reserve = "reserve"_n;
     static constexpr eosio::name _updater = "updater"_n;
     static constexpr eosio::name _token_contract = "eosio.token"_n;
-    static constexpr eosio::symbol _op_symbol     = eosio::symbol(eosio::symbol_code("CRU"), 0);
-    static constexpr eosio::symbol _core_symbol     = eosio::symbol(eosio::symbol_code("UNTB"), 0);
-    static constexpr eosio::symbol _usdu_symbol     = eosio::symbol(eosio::symbol_code("USDU"), 0);
+
     
     
     #ifdef IS_DEBUG
@@ -92,19 +84,6 @@ public:
 
     typedef eosio::multi_index<"locks"_n, locks> locks_index;
 
-    struct [[eosio::table]] balance {
-        eosio::name username;
-        eosio::asset quantity;
-
-        uint64_t primary_key() const {return username.value;}
-        uint64_t byvalue() const {return quantity.amount;}
-        EOSLIB_SERIALIZE(balance, (username)(quantity))
-    };
-
-    typedef eosio::multi_index<"balance"_n, balance,
-    eosio::indexed_by<"byvalue"_n, eosio::const_mem_fun<balance, uint64_t, &balance::byvalue>>
-    > balance_index;
-
 
     struct [[eosio::table]] tbalance {
         eosio::name username;
@@ -120,14 +99,8 @@ public:
     };
 
     typedef eosio::multi_index<"tbalance"_n, tbalance,
-
-    eosio::indexed_by<"bytotalcru"_n, eosio::const_mem_fun<tbalance, uint64_t, &tbalance::bytotalcru>>,
-    eosio::indexed_by<"bytotalcru"_n, eosio::const_mem_fun<tbalance, uint64_t, &tbalance::bytotalcru>>,
-    eosio::indexed_by<"bytotalcru"_n, eosio::const_mem_fun<tbalance, uint64_t, &tbalance::bytotalcru>>,
-    eosio::indexed_by<"bytotalcru"_n, eosio::const_mem_fun<tbalance, uint64_t, &tbalance::bytotalcru>>,
-    eosio::indexed_by<"bytotalcru"_n, eosio::const_mem_fun<tbalance, uint64_t, &tbalance::bytotalcru>>,
-    eosio::indexed_by<"bytotalcru"_n, eosio::const_mem_fun<tbalance, uint64_t, &tbalance::bytotalcru>>
-
+        eosio::indexed_by<"bytotalcru"_n, eosio::const_mem_fun<tbalance, uint64_t, &tbalance::bytotalcru>>,
+        eosio::indexed_by<"byfrozedcru"_n, eosio::const_mem_fun<tbalance, uint64_t, &tbalance::byfrozedcru>>
     > tbalance_index;
 
 
@@ -223,6 +196,14 @@ public:
       // explicit serialization macro is not necessary, used here only to improve compilation time
       EOSLIB_SERIALIZE( authority, (threshold)(keys)(accounts)(waits) )
    };
- 
+
+
+private:
+    void apply(uint64_t receiver, uint64_t code, uint64_t action);   
+    eosio::asset get_debt(eosio::name username);   
+    void modify_debt(eosio::name username, eosio::asset amount_to_add);   
+    void modify_balance(eosio::name username, eosio::asset amount_to_add, uint64_t type);   
+    double get_current_percent(uint64_t last_distributed_cycle);
+
  
 };
