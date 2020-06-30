@@ -8,41 +8,27 @@ using namespace eosio;
   [[eosio::action]] void tokenlock::setbal(eosio::name username, eosio::asset frozen_balance){
     require_auth(_updater);
 
-    eosio::check( is_account( username ), "user account does not exist");
-    eosio::check(frozen_balance.symbol == _op_symbol, "wrong symbol");
-
-    action(
-        permission_level{ _reserve, "active"_n },
-        _token_contract, "transfer"_n,
-        std::make_tuple( _reserve, _self, frozen_balance, std::string("")) 
-    ).send();
-
   }
 
   [[eosio::action]] void tokenlock::updatebal(eosio::name username){
     require_auth(_updater);
 
-    history_index history(_self, username.value);
-    auto hist_bv = history.begin();
-
-    eosio::asset frozen = asset(0, _op_symbol);
-
     eosio::check( is_account( username ), "user account does not exist");
 
-    while(hist_bv != history.end()) {
+    tokenlock::tbalance_index balances(tokenlock::_self, tokenlock::_self.value);
+    
+    auto bal = balances.find(username.value);
 
-      if (hist_bv -> algorithm > 0) {
-        frozen += hist_bv -> amount;
-      }
-      hist_bv++;
-    }        
+    if (bal != balances.end()){
+
+      action(
+          permission_level{ _reserve, "active"_n },
+          _token_contract, "transfer"_n,
+          std::make_tuple( _reserve, _self, bal -> cru_frozen, std::string("")) 
+      ).send();
+
+    }    
  
-    action(
-        permission_level{ _reserve, "active"_n },
-        _token_contract, "transfer"_n,
-        std::make_tuple( _reserve, _self, frozen, std::string("")) 
-    ).send();
-
   }
 
 

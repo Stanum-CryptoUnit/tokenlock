@@ -33,13 +33,12 @@ public:
 
     typedef eosio::multi_index< "accounts"_n, account > accounts;
 
-    static constexpr eosio::symbol _op_symbol     = eosio::symbol(eosio::symbol_code("CRU"), 0);
-    
+
     static constexpr eosio::name _self = "tokenlock"_n;   
     static constexpr eosio::name _reserve = "reserve"_n;
     static constexpr eosio::name _updater = "updater"_n;
     static constexpr eosio::name _token_contract = "eosio.token"_n;
-
+    static constexpr eosio::symbol _op_symbol     = eosio::symbol(eosio::symbol_code("CRU"), 0);
     
     
     #ifdef IS_DEBUG
