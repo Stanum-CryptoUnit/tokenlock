@@ -1,5 +1,5 @@
 {
-    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Tue Jun 30 12:45:31 2020",
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Wed Oct 28 07:48:31 2020",
     "version": "eosio::abi/1.1",
     "structs": [
         {
@@ -53,6 +53,10 @@
                 {
                     "name": "balance",
                     "type": "asset"
+                },
+                {
+                    "name": "type",
+                    "type": "uint64"
                 }
             ]
         },
@@ -85,6 +89,34 @@
                 {
                     "name": "timestamp",
                     "type": "time_point_sec"
+                }
+            ]
+        },
+        {
+            "name": "frstake",
+            "base": "",
+            "fields": [
+                {
+                    "name": "username",
+                    "type": "name"
+                },
+                {
+                    "name": "quantity",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "frunstake",
+            "base": "",
+            "fields": [
+                {
+                    "name": "username",
+                    "type": "name"
+                },
+                {
+                    "name": "quantity",
+                    "type": "asset"
                 }
             ]
         },
@@ -123,6 +155,20 @@
             ]
         },
         {
+            "name": "intchange",
+            "base": "",
+            "fields": [
+                {
+                    "name": "username",
+                    "type": "name"
+                },
+                {
+                    "name": "lock_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
             "name": "locks",
             "base": "",
             "fields": [
@@ -139,6 +185,10 @@
                     "type": "time_point_sec"
                 },
                 {
+                    "name": "is_staked",
+                    "type": "bool"
+                },
+                {
                     "name": "algorithm",
                     "type": "uint64"
                 },
@@ -152,6 +202,10 @@
                 },
                 {
                     "name": "withdrawed",
+                    "type": "asset"
+                },
+                {
+                    "name": "staked",
                     "type": "asset"
                 }
             ]
@@ -167,6 +221,10 @@
                 {
                     "name": "public_key",
                     "type": "public_key"
+                },
+                {
+                    "name": "self_owner",
+                    "type": "bool"
                 }
             ]
         },
@@ -181,6 +239,24 @@
                 {
                     "name": "id",
                     "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "restore",
+            "base": "",
+            "fields": [
+                {
+                    "name": "username",
+                    "type": "name"
+                },
+                {
+                    "name": "public_key",
+                    "type": "public_key"
+                },
+                {
+                    "name": "self_owner",
+                    "type": "bool"
                 }
             ]
         },
@@ -213,6 +289,44 @@
                 {
                     "name": "cru_frozen",
                     "type": "asset"
+                },
+                {
+                    "name": "wcru_total",
+                    "type": "asset"
+                },
+                {
+                    "name": "wcru_frozen",
+                    "type": "asset"
+                },
+                {
+                    "name": "untb_total",
+                    "type": "asset"
+                },
+                {
+                    "name": "untb_staked",
+                    "type": "asset"
+                },
+                {
+                    "name": "usdu_total",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "tbalance2",
+            "base": "",
+            "fields": [
+                {
+                    "name": "username",
+                    "type": "name"
+                },
+                {
+                    "name": "cru_staked",
+                    "type": "asset"
+                },
+                {
+                    "name": "wcru_staked",
+                    "type": "asset"
                 }
             ]
         },
@@ -236,6 +350,14 @@
                 },
                 {
                     "name": "migrated_at",
+                    "type": "time_point_sec"
+                },
+                {
+                    "name": "unfreeze_enabled",
+                    "type": "bool"
+                },
+                {
+                    "name": "start_unfreeze_at",
                     "type": "time_point_sec"
                 }
             ]
@@ -268,6 +390,21 @@
             "ricardian_contract": ""
         },
         {
+            "name": "frstake",
+            "type": "frstake",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "frunstake",
+            "type": "frunstake",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "intchange",
+            "type": "intchange",
+            "ricardian_contract": ""
+        },
+        {
             "name": "migrate",
             "type": "migrate",
             "ricardian_contract": ""
@@ -275,6 +412,11 @@
         {
             "name": "refresh",
             "type": "refresh",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "restore",
+            "type": "restore",
             "ricardian_contract": ""
         },
         {
@@ -332,6 +474,13 @@
         {
             "name": "tbalance",
             "type": "tbalance",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "tbalance2",
+            "type": "tbalance2",
             "index_type": "i64",
             "key_names": [],
             "key_types": []
