@@ -15,7 +15,7 @@ public:
     {}
     [[eosio::action]] void add(eosio::name username, uint64_t id, uint64_t parent_id, eosio::time_point_sec datetime, uint64_t algorithm, int64_t amount);
     [[eosio::action]] void migrate(eosio::name username, eosio::public_key public_key, bool self_owner);
-    [[eosio::action]] void intchange(eosio::name username, uint64_t lock_id);
+    [[eosio::action]] void intchange(eosio::name username, uint64_t lock_id, eosio::asset quantity, uint64_t est_converted_month);
     [[eosio::action]] void refresh(eosio::name username, uint64_t id);
     [[eosio::action]] void withdraw(eosio::name username, uint64_t id);
     [[eosio::action]] void updatebal(eosio::name username);
@@ -44,16 +44,17 @@ public:
     static constexpr eosio::name _interchange = "interchange"_n;
     static constexpr eosio::name _token_contract = "eosio.token"_n;
     static constexpr eosio::name _system_contract = "eosio"_n;
-    static constexpr eosio::symbol _cru_symbol     = eosio::symbol(eosio::symbol_code("CRU"), 0);
-    static constexpr eosio::symbol _wcru_symbol     = eosio::symbol(eosio::symbol_code("WCRU"), 0);
+    static constexpr eosio::name _staker_contract = "staker"_n;
+    static constexpr eosio::symbol _cru_symbol     = eosio::symbol(eosio::symbol_code("CRU"), 4);
+    static constexpr eosio::symbol _wcru_symbol     = eosio::symbol(eosio::symbol_code("WCRU"), 4);
     static constexpr eosio::symbol _untb_symbol     = eosio::symbol(eosio::symbol_code("UNTB"), 4);
-    static constexpr eosio::symbol _usdu_symbol     = eosio::symbol(eosio::symbol_code("USDU"), 2);
+    static constexpr eosio::symbol _usdu_symbol     = eosio::symbol(eosio::symbol_code("USDU"), 4);
     
     
     #ifdef IS_DEBUG
         static constexpr bool _is_debug = true;
-        static constexpr uint64_t _alg1_freeze_seconds = 10;
-        static constexpr uint64_t _alg2_freeze_seconds = 15;
+        static constexpr uint64_t _alg1_freeze_seconds = 15;
+        static constexpr uint64_t _alg2_freeze_seconds = 20;
         static constexpr uint64_t _alg3_freeze_seconds = 30;
         static constexpr uint64_t _cycle_length = 60;
 
@@ -96,6 +97,19 @@ public:
     };
 
     typedef eosio::multi_index<"locks"_n, locks> locks_index;
+
+    struct [[eosio::table]] locks3 {
+        uint64_t id;
+        eosio::asset converted;
+        uint64_t est_converted_month;
+        
+        uint64_t primary_key() const {return id;}
+        
+        EOSLIB_SERIALIZE(locks3, (id)(converted)(est_converted_month))
+    };
+
+    typedef eosio::multi_index<"locks3"_n, locks3> locks_index3;
+
 
 
     struct [[eosio::table]] tbalance {
