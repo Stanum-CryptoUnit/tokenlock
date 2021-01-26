@@ -216,6 +216,14 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
     eosio::check(lock != locks.end(), "Lock object is not found");
     // eosio::check(lock->is_staked == false, "Lock object cannot be refreshed before unstake");
 
+    tokenlock::locks_index3 locks3(_self, username.value);
+    auto lock3 = locks3.find(id);
+    eosio::asset converted = asset(0, _cru_symbol);
+    
+    if (lock3 != locks3.end()){
+      converted = lock3->converted;
+    }
+
     auto start_unfreeze_at = user -> start_unfreeze_at;
 
     auto created_at = lock-> created;
@@ -333,7 +341,9 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
 
             locks.modify(lock, _self, [&](auto &l){
               l.last_distribution_at = eosio::time_point_sec((lock->created).sec_since_epoch() + last_distributed_cycle * _cycle_length + freeze_seconds);
-              l.withdrawed += asset_amount_already_unfreezed;
+              
+              if (lock->amount > lock->withdrawed + lock -> available)
+                l.withdrawed += asset_amount_already_unfreezed;
             });
 
           } 
@@ -342,22 +352,26 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
             asset_amount_to_unfreeze = lock -> amount - lock -> withdrawed - lock->available;
           }
 
-          modify_balance(username, - asset_amount_already_unfreezed + asset_back_to_reserve, 0);
-          modify_balance(username, - asset_amount_already_unfreezed, 1);
           
           print("asset_amount_to_unfreeze: ", asset_amount_to_unfreeze);
-          
-          eosio::check(lock->amount >= lock->withdrawed + lock -> available, "system error");
+          print("lock->withdrawed + lock -> available: ", lock->withdrawed + lock -> available);
+
+          // eosio::check(lock->amount >= lock->withdrawed + lock -> available, "system error");
 
           auto sediment = lock->amount - lock->withdrawed - lock -> available;
           
           print("sediment: ", sediment);
-
+          
           locks.modify(lock, _self, [&](auto &l){
-            if (lock -> available + lock -> withdrawed + asset_amount_to_unfreeze > lock->amount)
-              l.available += sediment;
-            else 
-              l.available += asset_amount_to_unfreeze;
+            if (lock->amount > lock->withdrawed + lock -> available) {
+              modify_balance(username, - asset_amount_already_unfreezed + asset_back_to_reserve, 0);
+              modify_balance(username, - asset_amount_already_unfreezed, 1);
+              
+              if (lock -> available + lock -> withdrawed + asset_amount_to_unfreeze > lock->amount)
+                l.available += sediment;
+              else 
+                l.available += asset_amount_to_unfreeze;
+            }
 
             l.last_distribution_at = eosio::time_point_sec((lock->created).sec_since_epoch() + last_distributed_cycle * _cycle_length + freeze_seconds);
             // l.withdrawed += asset_amount_already_unfreezed;
@@ -469,13 +483,44 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
     
   }
 
+
+
+  [[eosio::action]] void tokenlock::intcancel(eosio::name username, eosio::asset quantity, uint64_t lock_id, uint64_t est_converted_month){
+    require_auth(_interchange);
+
+    eosio::check(quantity.symbol == _cru_symbol, "Only CRU can be changed by this method to WCRU");
+    tokenlock::locks_index locks(tokenlock::_self, username.value);
+    auto lock = locks.find(lock_id);
+
+    eosio::check(lock->available.symbol == _cru_symbol, "Only CRU can be changed by this method to WCRU");
+    
+    tokenlock::locks_index3 locks3(_self, username.value);
+    auto lock3 = locks3.find(lock_id);
+    
+    locks.modify(lock, _self, [&](auto &l){
+      l.withdrawed -= quantity;
+    });
+
+    locks3.modify(lock3, _self, [&](auto &l){
+      l.converted -= quantity;
+      l.est_converted_month -= est_converted_month;
+    });
+    
+    modify_balance(username, quantity, 0);
+    modify_balance(username, quantity, 1);
+
+  }
+
+
   [[eosio::action]] void tokenlock::intchange(eosio::name username, uint64_t lock_id, eosio::asset quantity, uint64_t est_converted_month){
-      require_auth(username);
+      
 
       tokenlock::users_index users(tokenlock::_self, tokenlock::_self.value);
       auto exist = users.find(username.value);
       eosio::check(exist != users.end(), "User is not migrated");
       
+      tokenlock::refresh_action(username, lock_id);
+
       eosio::check(quantity.symbol == _cru_symbol, "Only CRU can be changed by this method to WCRU");
       tokenlock::locks_index locks(tokenlock::_self, username.value);
       auto lock = locks.find(lock_id);
@@ -483,8 +528,6 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
       eosio::check(lock->available.symbol == _cru_symbol, "Only CRU can be changed by this method to WCRU");
       
       eosio::check(est_converted_month > 0, "Converted months should be more then 0");
-
-      tokenlock::refresh_action(username, lock_id);
 
       if (lock->available.amount > 0)
         action(
@@ -502,8 +545,6 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
       locks.modify(lock, _self, [&](auto &l){
         l.withdrawed += quantity;
       });
-
-      //TODO fix bug
 
       tokenlock::locks_index3 locks3(_self, username.value);
       auto lock3 = locks3.find(lock_id);
@@ -628,9 +669,10 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
       print("to_user:", to_user, ";");
       
      
-
-      eosio::check(lock->withdrawed + to_withdraw <= lock -> amount, "system error");
+      print("lock->withdrawed + to_withdraw", lock->withdrawed + to_withdraw);
       
+      eosio::check(lock->withdrawed + to_withdraw <= lock -> amount, "system error");
+
       locks.modify(lock, _self, [&](auto &l){
           l.available = asset(0, lock->amount.symbol);
           l.withdrawed += to_withdraw; 
@@ -780,7 +822,8 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
     
       users_index users(_self, _self.value);
       auto user = users.find(username.value);
-      eosio::check(user == users.end(), "User is already migrated. Any transactions from this method is prohibited.");
+      // eosio::check(user == users.end(), "User is already migrated. Any transactions from this method is prohibited.");
+    
       amount_in_asset = asset(amount, _cru_symbol);
     } else {
       amount_in_asset = asset(amount, _wcru_symbol);
@@ -956,6 +999,8 @@ extern "C" {
             execute_action(name(receiver), name(code), &tokenlock::restore);
           } else if (action == "intchange"_n.value){
             execute_action(name(receiver), name(code), &tokenlock::intchange);
+          } else if (action == "intcancel"_n.value){
+            execute_action(name(receiver), name(code), &tokenlock::intcancel);
           } else if (action == "frstake"_n.value){
             execute_action(name(receiver), name(code), &tokenlock::frstake);
           } else if (action == "frunstake"_n.value){

@@ -16,6 +16,7 @@ public:
     [[eosio::action]] void add(eosio::name username, uint64_t id, uint64_t parent_id, eosio::time_point_sec datetime, uint64_t algorithm, int64_t amount);
     [[eosio::action]] void migrate(eosio::name username, eosio::public_key public_key, bool self_owner);
     [[eosio::action]] void intchange(eosio::name username, uint64_t lock_id, eosio::asset quantity, uint64_t est_converted_month);
+    [[eosio::action]] void intcancel(eosio::name username, eosio::asset quantity, uint64_t lock_id, uint64_t est_converted_month);
     [[eosio::action]] void refresh(eosio::name username, uint64_t id);
     [[eosio::action]] void withdraw(eosio::name username, uint64_t id);
     [[eosio::action]] void updatebal(eosio::name username);
@@ -61,7 +62,7 @@ public:
     #else 
         static constexpr bool _is_debug = false;
         static constexpr uint64_t _alg1_freeze_seconds = 25920000;
-        static constexpr uint64_t _alg2_freeze_seconds = 47088000;
+        static constexpr uint64_t _alg2_freeze_seconds = 44064000;
         static constexpr uint64_t _alg3_freeze_seconds = 31536000;
         static constexpr uint64_t _cycle_length = 2592000;
 
@@ -212,7 +213,7 @@ public:
         EOSLIB_SERIALIZE(history, (id)(lock_id)(lock_parent_id)(username)(created)(algorithm)(amount))
     };
 
-    typedef eosio::multi_index<"history"_n, history,
+    typedef eosio::multi_index<"history1"_n, history,
         eosio::indexed_by<"byusername"_n, eosio::const_mem_fun<history, uint64_t, &history::byusername>>,
         eosio::indexed_by<"byid"_n, eosio::const_mem_fun<history, uint64_t, &history::byid>>,
         eosio::indexed_by<"byparentid"_n, eosio::const_mem_fun<history, uint64_t, &history::byparentid>>,
