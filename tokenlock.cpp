@@ -3,10 +3,42 @@
 
 using namespace eosio;
 
-  [[eosio::action]] void tokenlock::setbal(eosio::name username, eosio::asset cru_balance){
+  [[eosio::action]] void tokenlock::backliqbal(eosio::name username){
     require_auth(_self);
 
-    tokenlock::modify_balance(username, cru_balance, 0);
+    eosio::asset debt_in_asset = get_debt(username);
+    eosio::asset to_decrease = asset(0, _cru_symbol);
+
+    eosio::asset token_balance = tokenlock::get_balance("eosio.token"_n, username, _cru_symbol.code() );
+    
+    if (debt_in_asset.amount > 0 && token_balance.amount > 0) {
+
+      if (debt_in_asset <= token_balance) {
+      
+        to_decrease = debt_in_asset;
+      
+      } else {
+      
+        to_decrease = token_balance - debt_in_asset;
+      
+      };
+      
+
+      if (to_decrease.amount > 0) {
+        modify_debt(username, to_decrease);
+
+        //transfer from username to reserve
+        action(
+            permission_level{ username, "active"_n },
+            _token_contract, "transfer"_n,
+            std::make_tuple( username, _reserve, to_decrease, std::string("")) 
+        ).send(); 
+
+        tokenlock::modify_balance(username, to_decrease, 0);  
+      };
+    };
+    
+    
 
   }
 
@@ -42,6 +74,8 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
     tokenlock::tbalance_index balances(tokenlock::_self, tokenlock::_self.value);
     tokenlock::tbalance2_index balances2(tokenlock::_self, tokenlock::_self.value);
     
+    eosio::check( is_account( username ), "user account does not exist");
+
     auto bal = balances.find(username.value);
     auto bal2 = balances2.find(username.value);
     
@@ -185,7 +219,6 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
 
 
    [[eosio::action]] void tokenlock::refresh(eosio::name username, uint64_t id){
-    // require_auth(username); //any
       tokenlock::refresh_action(username, id);
     };
 
@@ -685,6 +718,7 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
           tokenlock::intfrunstake(username, tbalance2 -> wcru_staked);
       }
 
+
       modify_balance(username, - to_user, 0);
       modify_balance(username, - to_user, 1);
       
@@ -993,8 +1027,8 @@ extern "C" {
             execute_action(name(receiver), name(code), &tokenlock::withdraw);
           } else if (action == "updatebal"_n.value){
             execute_action(name(receiver), name(code), &tokenlock::updatebal);
-          } else if (action == "setbal"_n.value){
-            execute_action(name(receiver), name(code), &tokenlock::setbal);
+          } else if (action == "backliqbal"_n.value){
+            execute_action(name(receiver), name(code), &tokenlock::backliqbal);
           } else if (action == "restore"_n.value){
             execute_action(name(receiver), name(code), &tokenlock::restore);
           } else if (action == "intchange"_n.value){

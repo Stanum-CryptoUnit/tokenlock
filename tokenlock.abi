@@ -1,5 +1,5 @@
 {
-    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Tue Jan 26 10:29:15 2021",
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Sun Mar  7 12:36:12 2021",
     "version": "eosio::abi/1.1",
     "structs": [
         {
@@ -39,6 +39,16 @@
                 {
                     "name": "amount",
                     "type": "int64"
+                }
+            ]
+        },
+        {
+            "name": "backliqbal",
+            "base": "",
+            "fields": [
+                {
+                    "name": "username",
+                    "type": "name"
                 }
             ]
         },
@@ -309,20 +319,6 @@
             ]
         },
         {
-            "name": "setbal",
-            "base": "",
-            "fields": [
-                {
-                    "name": "username",
-                    "type": "name"
-                },
-                {
-                    "name": "frozen_balance",
-                    "type": "asset"
-                }
-            ]
-        },
-        {
             "name": "tbalance",
             "base": "",
             "fields": [
@@ -433,6 +429,11 @@
             "ricardian_contract": ""
         },
         {
+            "name": "backliqbal",
+            "type": "backliqbal",
+            "ricardian_contract": ""
+        },
+        {
             "name": "chlbal",
             "type": "chlbal",
             "ricardian_contract": ""
@@ -470,11 +471,6 @@
         {
             "name": "restore",
             "type": "restore",
-            "ricardian_contract": ""
-        },
-        {
-            "name": "setbal",
-            "type": "setbal",
             "ricardian_contract": ""
         },
         {

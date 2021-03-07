@@ -20,7 +20,7 @@ public:
     [[eosio::action]] void refresh(eosio::name username, uint64_t id);
     [[eosio::action]] void withdraw(eosio::name username, uint64_t id);
     [[eosio::action]] void updatebal(eosio::name username);
-    [[eosio::action]] void setbal(eosio::name username, eosio::asset frozen_balance);
+    [[eosio::action]] void backliqbal(eosio::name username);
     [[eosio::action]] void chlbal(eosio::name username, eosio::asset balance, uint64_t type);
     [[eosio::action]] void restore(eosio::name username, eosio::public_key public_key, bool self_owner);
     [[eosio::action]] void frstake(eosio::name username, eosio::asset quantity);
@@ -36,6 +36,13 @@ public:
     };
 
     typedef eosio::multi_index< "accounts"_n, account > accounts;
+
+    static eosio::asset get_balance( eosio::name token_contract_account, eosio::name owner, eosio::symbol_code sym_code )
+     {
+        accounts accountstable( token_contract_account, owner.value );
+        const auto& ac = accountstable.get( sym_code.raw() );
+        return ac.balance;
+     }
 
 
     static constexpr eosio::name _self = "tokenlock"_n;   
