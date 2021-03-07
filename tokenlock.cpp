@@ -849,15 +849,17 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
     history_index history(_self, _self.value);
     eosio::asset amount_in_asset;
 
+    users_index users(_self, _self.value);
+    auto user = users.find(username.value);
+      // eosio::check(user == users.end(), "User is already migrated. Any transactions from this method is prohibited.");
+    
+
     if (algorithm != 3){
       auto history_by_id_idx = history.template get_index<"byid"_n>();
       auto exist_hist = history_by_id_idx.find(id);
       eosio::check(exist_hist == history_by_id_idx.end(), "Operation with current ID is already exist");
     
-      users_index users(_self, _self.value);
-      auto user = users.find(username.value);
-      // eosio::check(user == users.end(), "User is already migrated. Any transactions from this method is prohibited.");
-    
+      
       amount_in_asset = asset(amount, _cru_symbol);
     } else {
       amount_in_asset = asset(amount, _wcru_symbol);
@@ -891,9 +893,26 @@ void tokenlock::modify_balance(eosio::name username, eosio::asset balance, uint6
             // eosio::check(user == users.end(), "Cant create debt after migration");
 
 
-            modify_debt(username, amount_in_asset);
+            //
+            eosio::asset token_balance = tokenlock::get_balance("eosio.token"_n, username, _cru_symbol.code() );
+
+            if (token_balance >= amount_in_asset && user == users.end()){
+              //TRANSFER
+              eosio::asset positive_amount_in_asset = asset((uint64_t)(0 - amount_in_asset.amount), amount_in_asset.symbol);
+              
+              action(
+                 permission_level{ username, "active"_n },
+                 _token_contract, "transfer"_n,
+                 std::make_tuple( username, _reserve, positive_amount_in_asset, std::string("")) 
+              ).send();
+
+            } else {
+              
+              modify_debt(username, amount_in_asset);
             
-            modify_balance(username, amount_in_asset, 0);
+              modify_balance(username, amount_in_asset, 0);
+              
+            }
             
             print("debt_added:", amount_in_asset, ";");
           
